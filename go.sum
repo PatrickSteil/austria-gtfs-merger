@@ -1,0 +1,12 @@
+github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
+github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
+github.com/klauspost/compress v1.17.7 h1:ehO88t2UGzQK66LMdE8tibEd1ErmzZjNEqWkjLAKQQg=
+github.com/klauspost/compress v1.17.7/go.mod h1:Di0epgTjJY877eYKx5yC51cX2A2Vl2ibi7bDH9ttBbw=
+github.com/patrickbr/gtfsparser v0.0.0-20251201215810-e1d245cf26b0 h1:TzjtTTs4Qs4W4Col7p4E+gpekaZgHPBPcYhhXRUhgaE=
+github.com/patrickbr/gtfsparser v0.0.0-20251201215810-e1d245cf26b0/go.mod h1:WsjXLsxSQc+KfBJ7APQhk3yz+4DztzMYARQ+EfxKYSQ=
+github.com/patrickbr/gtfswriter v0.0.0-20241126214321-b6c6255581e4 h1:eRhBo3W/evmQ+WUj6xKjo84CuKuWojzteIlvonjWpD4=
+github.com/patrickbr/gtfswriter v0.0.0-20241126214321-b6c6255581e4/go.mod h1:B5RQqAhVjVuyfmnugGWZAENLM0liyRWR0lbhkcXcZc8=
+github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
+github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
+github.com/valyala/fastjson v1.6.4 h1:uAUNq9Z6ymTgGhcm0UynUAB6tlbakBrz6CQFax3BXVQ=
+github.com/valyala/fastjson v1.6.4/go.mod h1:CLCAqky6SMuOcxStkYQvblddUtoRxhYMGLrsQns1aXY=
