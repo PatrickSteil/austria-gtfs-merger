@@ -19,6 +19,8 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
+var version = "dev"
+
 type Job struct {
 	id   string
 	year string
@@ -29,7 +31,7 @@ func main() {
 	godotenv.Load()
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "merger (C) Patrick Steil <patrick@steil.dev>\n")
+		fmt.Fprintf(os.Stderr, "merger (C) Patrick Steil <patrick@steil.dev>\nVersion %s\nUsage:\n", version)
 		flag.PrintDefaults()
 	}
 
