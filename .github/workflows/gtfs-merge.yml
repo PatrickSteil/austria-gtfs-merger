@@ -1,0 +1,35 @@
+name: Merge
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Every day at 04:00 UTC
+  workflow_dispatch:
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Build
+        run: make
+
+      - name: Run GTFS merger
+        env:
+          USERNAME: ${{ secrets.GTFS_USERNAME }}
+          PASSWORD: ${{ secrets.GTFS_PASSWORD }}
+        run: ./merger -d -e -o austria.merged.zip
+
+      - name: Upload merged GTFS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: austria.merged
+          path: austria.merged.zip
+          retention-days: 7
