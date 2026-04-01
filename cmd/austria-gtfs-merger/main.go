@@ -9,9 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
-	"github.com/PatrickSteil/austria-gtfs-merger/internal/auth"
 	"github.com/PatrickSteil/austria-gtfs-merger/internal/download"
 	"github.com/joho/godotenv"
 	"github.com/patrickbr/gtfsparser"
@@ -73,52 +71,13 @@ func main() {
 	}
 
 	if *downloadFlag {
-		aut := auth.NewAuth(username, password)
-
-		log.Printf("fetch   datasets from DBP...")
-		datasets, err := auth.GetDatasets(aut)
-		if err != nil {
-			log.Fatalf("error   fetching datasets: %v", err)
-		}
-
-		var jobs []Job
-		for _, ds := range datasets {
-			if !auth.IsGTFS(ds) || len(ds.ActiveVersions) == 0 {
-				continue
-			}
-			v := ds.ActiveVersions[0]
-			jobs = append(jobs, Job{
-				id:   ds.ID,
-				year: v.Year,
-				name: v.DataSetVersion.File.OriginalName,
-			})
-		}
-
-		log.Printf("found   %d GTFS dataset(s), downloading...", len(jobs))
-
-		var wg sync.WaitGroup
-		jobChan := make(chan Job)
-
-		for i := 0; i < maxWorkers; i++ {
-			wg.Add(1)
-			go func(workerID int) {
-				defer wg.Done()
-				for job := range jobChan {
-					if *verboseFlag {
-						log.Printf("worker  %d downloading %s", workerID, job.name)
-					}
-					download.DownloadDataset(aut, job.id, job.year, job.name, *dirFlag)
-				}
-			}(i)
-		}
-
-		for _, j := range jobs {
-			jobChan <- j
-		}
-		close(jobChan)
-		wg.Wait()
-
-		log.Printf("done    downloads complete")
+		download.DownloadAllDatasets(
+			username,
+			password,
+			*dirFlag,
+			maxWorkers,
+			*verboseFlag,
+		)
 	}
 
 	files, err := filepath.Glob(filepath.Join(*dirFlag, "*.zip"))
