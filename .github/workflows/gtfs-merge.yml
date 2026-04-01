@@ -25,7 +25,7 @@ jobs:
         env:
           USERNAME: ${{ secrets.GTFS_USERNAME }}
           PASSWORD: ${{ secrets.GTFS_PASSWORD }}
-        run: ./merger -d -e -o austria.merged.zip
+        run: ./merger -d -e -o austria.merged.zip --drop-shapes
 
       - name: Upload merged GTFS artifact
         uses: actions/upload-artifact@v4
