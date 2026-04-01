@@ -1,4 +1,4 @@
-project_name: nextbike
+project_name: merger
 
 before:
   hooks:
