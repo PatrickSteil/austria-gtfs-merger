@@ -2,7 +2,7 @@ name: Merge
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # Every day at 04:00 UTC
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
@@ -33,3 +33,12 @@ jobs:
           name: austria.merged
           path: austria.merged.zip
           retention-days: 7
+
+      - name: Upload to GitHub Release (latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest GTFS Merge
+          files: austria.merged.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
