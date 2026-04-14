@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force re-merge even if no new data'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: write
@@ -24,24 +30,102 @@ jobs:
       - name: Build
         run: make
 
+      # Run the merger. The binary exits 0 in all cases:
+      #   - exit 0 + "nothing to do"  → no new data, skip release
+      #   - exit 0 + merged file written → new data, proceed to release
+      # We detect which happened by checking whether versions.json changed.
       - name: Run GTFS merger
+        id: merge
         env:
           USERNAME: ${{ secrets.GTFS_USERNAME }}
           PASSWORD: ${{ secrets.GTFS_PASSWORD }}
-        run: ./merger -d -e -o austria.merged.zip --drop-shapes
+        run: |
+          FORCE_FLAG=""
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+          ./merger -d -e --drop-shapes \
+            --manifest versions.json \
+            --output austria.merged.zip \
+            $FORCE_FLAG
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
+      # Check whether the manifest changed (= at least one feed was updated).
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet versions.json 2>/dev/null || [ ! -f versions.json ]; then
+            # Also treat a forced run as "changed" so the release still happens.
+            if [ "${{ github.event.inputs.force }}" = "true" ]; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              echo "No GTFS versions changed – skipping release."
+            fi
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Commit the updated versions.json back so the next run has a baseline.
+      - name: Commit updated manifest
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add versions.json
+          git diff --cached --quiet || git commit -m "chore: update GTFS version manifest [skip ci]"
+          git push
+
+      # Always upload as a workflow artifact (available for 7 days, useful for
+      # debugging even when no release is cut).
       - name: Upload merged GTFS artifact
+        if: steps.changes.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: austria.merged
           path: austria.merged.zip
           retention-days: 7
 
-      - name: Upload to GitHub Release (latest)
+      # Update (or create) a rolling "latest" release so there is always a
+      # stable permalink:
+      #   https://github.com/<owner>/<repo>/releases/download/latest/austria.merged.zip
+      #
+      # The release body includes the UTC timestamp from feed_info.txt so
+      # anyone visiting the release page can see when it was last generated.
+      - name: Publish / update "latest" release
+        if: steps.changes.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: Latest GTFS Merge
+          name: "Latest GTFS Merge"
+          body: |
+            Automatically updated merged GTFS feed for Austria.
+
+            **Last updated:** ${{ github.run_id }} · `${{ github.sha }}`
+
+            ### Permalink
+            ```
+            https://github.com/${{ github.repository }}/releases/download/latest/austria.merged.zip
+            ```
+
+            ### Version checking
+            The zip contains `feed_info.txt` with a `feed_version` field set to
+            the UTC build timestamp (`YYYYMMDD_HHMMSS`).  Download only that
+            entry to check whether you already have the latest version:
+
+            ```bash
+            # Check feed_version without downloading the full file
+            curl -sL https://github.com/${{ github.repository }}/releases/download/latest/austria.merged.zip \
+              | python3 -c "
+            import sys, zipfile, io
+            z = zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read()))
+            print(z.read('feed_info.txt').decode())
+            "
+            ```
+
+            Source manifests: see `versions.json` in this repository for the
+            individual feed versions that were merged.
           files: austria.merged.zip
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
