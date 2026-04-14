@@ -1,8 +1,9 @@
 name: Merge
 
 on:
+  # every six hours, but we cache, so all good
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       force:
