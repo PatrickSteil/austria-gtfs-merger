@@ -1,11 +1,11 @@
 {
   "52": {
     "year": "2026",
-    "originalName": "20260702-0037_gtfs_vor_2026.zip"
+    "originalName": "20260704-0014_gtfs_vor_2026.zip"
   },
   "53": {
     "year": "2026",
-    "originalName": "20260702-2352_gtfs_verbundlinie_2026.zip"
+    "originalName": "20260703-2340_gtfs_verbundlinie_2026.zip"
   },
   "54": {
     "year": "2026",
@@ -13,7 +13,7 @@
   },
   "55": {
     "year": "2026",
-    "originalName": "20260702-2257_gtfs_kaerntnerlinien_2026.zip"
+    "originalName": "20260703-2240_gtfs_kaerntnerlinien_2026.zip"
   },
   "56": {
     "year": "2026",
@@ -21,7 +21,7 @@
   },
   "57": {
     "year": "2026",
-    "originalName": "20260703-0006_gtfs_vvt_2026.zip"
+    "originalName": "20260704-0028_gtfs_vvt_2026.zip"
   },
   "58": {
     "year": "2026",
@@ -29,7 +29,7 @@
   },
   "66": {
     "year": "2026",
-    "originalName": "20260702-2314_gtfs_evu_2026.zip"
+    "originalName": "20260703-2301_gtfs_evu_2026.zip"
   },
   "69": {
     "year": "2026",
@@ -41,6 +41,6 @@
   },
   "72": {
     "year": "2026",
-    "originalName": "20260702-2010-at-styria-2026.zip"
+    "originalName": "20260703-2010-at-styria-2026.zip"
   }
 }
