@@ -1,19 +1,19 @@
 {
   "52": {
     "year": "2026",
-    "originalName": "20260724-0038_gtfs_vor_2026.zip"
+    "originalName": "20260725-0103_gtfs_vor_2026.zip"
   },
   "53": {
     "year": "2026",
-    "originalName": "20260724-0002_gtfs_verbundlinie_2026.zip"
+    "originalName": "20260725-0018_gtfs_verbundlinie_2026.zip"
   },
   "54": {
     "year": "2026",
-    "originalName": "20260721-0023_gtfs_salzburgverkehr_2026.zip"
+    "originalName": "20260725-0026_gtfs_salzburgverkehr_2026.zip"
   },
   "55": {
     "year": "2026",
-    "originalName": "20260722-2350_gtfs_kaerntnerlinien_2026.zip"
+    "originalName": "20260724-2315_gtfs_kaerntnerlinien_2026.zip"
   },
   "56": {
     "year": "2026",
@@ -21,7 +21,7 @@
   },
   "57": {
     "year": "2026",
-    "originalName": "20260723-0145_gtfs_vvt_2026.zip"
+    "originalName": "20260725-0118_gtfs_vvt_2026.zip"
   },
   "58": {
     "year": "2026",
@@ -29,7 +29,7 @@
   },
   "66": {
     "year": "2026",
-    "originalName": "20260723-2319_gtfs_evu_2026.zip"
+    "originalName": "20260724-2336_gtfs_evu_2026.zip"
   },
   "69": {
     "year": "2026",
@@ -41,6 +41,6 @@
   },
   "72": {
     "year": "2026",
-    "originalName": "20260723-2010-at-styria-2026.zip"
+    "originalName": "20260724-2010-at-styria-2026.zip"
   }
 }
