@@ -1,15 +1,15 @@
 {
   "52": {
     "year": "2026",
-    "originalName": "20260827-0057_gtfs_vor_2026.zip"
+    "originalName": "20260828-0047_gtfs_vor_2026.zip"
   },
   "53": {
     "year": "2026",
-    "originalName": "20260827-0009_gtfs_verbundlinie_2026.zip"
+    "originalName": "20260827-2359_gtfs_verbundlinie_2026.zip"
   },
   "54": {
     "year": "2026",
-    "originalName": "20260827-0019_gtfs_salzburgverkehr_2026.zip"
+    "originalName": "20260828-0008_gtfs_salzburgverkehr_2026.zip"
   },
   "55": {
     "year": "2026",
@@ -17,7 +17,7 @@
   },
   "56": {
     "year": "2026",
-    "originalName": "20260819-2242_gtfs_ooevv_2026.zip"
+    "originalName": "20260827-2325_gtfs_ooevv_2026.zip"
   },
   "57": {
     "year": "2026",
@@ -25,15 +25,15 @@
   },
   "58": {
     "year": "2026",
-    "originalName": "20260826-0057_gtfs_vmobil_2026.zip"
+    "originalName": "20260828-0052_gtfs_vmobil_2026.zip"
   },
   "66": {
     "year": "2026",
-    "originalName": "20260826-2326_gtfs_evu_2026.zip"
+    "originalName": "20260827-2302_gtfs_evu_2026.zip"
   },
   "69": {
     "year": "2026",
-    "originalName": "20260826-2257_gtfs_esg_2026.zip"
+    "originalName": "20260827-2243_gtfs_esg_2026.zip"
   },
   "70": {
     "year": "2026",
@@ -41,6 +41,6 @@
   },
   "72": {
     "year": "2026",
-    "originalName": "20260826-2010-at-styria-2026.zip"
+    "originalName": "20260827-2010-at-styria-2026.zip"
   }
 }
