@@ -2,7 +2,8 @@ package auth
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -11,29 +12,34 @@ import (
 )
 
 const (
-	KEYCLOAK = "https://user.mobilitaetsverbuende.at"
-	REALM    = "dbp-public"
+	keycloak = "https://user.mobilitaetsverbuende.at"
+	realm    = "dbp-public"
 )
 
 type DBPAuth struct {
 	Username string
 	Password string
 
-	Token  string
-	Expiry time.Time
+	token  string
+	expiry time.Time
 	mu     sync.Mutex
+	client *http.Client
 }
 
 func NewAuth(username, password string) *DBPAuth {
-	return &DBPAuth{Username: username, Password: password}
+	return &DBPAuth{
+		Username: username,
+		Password: password,
+		client:   &http.Client{Timeout: 30 * time.Second},
+	}
 }
 
 func (a *DBPAuth) GetToken() (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.Token != "" && time.Now().Before(a.Expiry) {
-		return a.Token, nil
+	if a.token != "" && time.Now().Before(a.expiry) {
+		return a.token, nil
 	}
 
 	form := url.Values{}
@@ -43,32 +49,41 @@ func (a *DBPAuth) GetToken() (string, error) {
 	form.Set("grant_type", "password")
 	form.Set("scope", "openid")
 
-	resp, err := http.Post(
-		KEYCLOAK+"/auth/realms/"+REALM+"/protocol/openid-connect/token",
+	resp, err := a.client.Post(
+		keycloak+"/auth/realms/"+realm+"/protocol/openid-connect/token",
 		"application/x-www-form-urlencoded",
 		strings.NewReader(form.Encode()),
 	)
-
 	if err != nil {
-		log.Fatalf("GetToken() failed due to %v", err)
-		return "", err
+		return "", fmt.Errorf("token request failed: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", fmt.Errorf("token request returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
 
 	var data struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int    `json:"expires_in"`
 	}
-
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		log.Fatalf("GetToken() failed due to %v", err)
-		return "", err
+		return "", fmt.Errorf("token decode failed: %w", err)
 	}
 
-	a.Token = data.AccessToken
-	a.Expiry = time.Now().Add(time.Duration(data.ExpiresIn-30) * time.Second)
+	a.token = data.AccessToken
+	a.expiry = time.Now().Add(time.Duration(data.ExpiresIn-30) * time.Second)
 
-	return a.Token, nil
+	return a.token, nil
+}
+
+// InvalidateToken clears the cached token, forcing a refresh on the next call.
+func (a *DBPAuth) InvalidateToken() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.token = ""
+	a.expiry = time.Time{}
 }
 
 func (a *DBPAuth) Header() (http.Header, error) {
