@@ -241,6 +241,7 @@ func main() {
 	problems = append(problems, checkStats(cur, prev, lim)...)
 	log.Printf("stats   agencies=%d stops=%d routes=%d (rail=%d) trips=%d",
 		cur.Agencies, cur.Stops, cur.Routes, cur.RailRoutes, cur.Trips)
+	log.Printf("stats   route types: %s", strings.Join(routeTypeCounts(feed), " "))
 	if len(problems) > 0 {
 		for _, p := range problems {
 			log.Printf("check   FAILED %s", p)
@@ -278,7 +279,9 @@ func main() {
 
 	log.Printf("done    GTFS written to %s", *outputFlag)
 
-	if err := injectFeedInfo(*outputFlag, isZip); err != nil {
+	startDate, endDate := activeRange(feed)
+	log.Printf("info    service dates %s - %s", startDate, endDate)
+	if err := injectFeedInfo(*outputFlag, isZip, startDate, endDate); err != nil {
 		log.Printf("warn    could not inject feed_info.txt: %v", err)
 	} else {
 		log.Printf("done    injected feed_info.txt into %s", *outputFlag)
@@ -542,15 +545,15 @@ func parentStationID(stopID string) string {
 }
 
 // injectFeedInfo adds (or replaces) feed_info.txt in the merged output with a
-// feed_version set to the current UTC timestamp (YYYYMMDD_HHMMSS). The start
-// and end dates are left blank: the real validity window is defined by the
-// calendars, not by the build time. For a directory output the file is written
-// directly; for a zip, the archive is rewritten.
-func injectFeedInfo(out string, isZip bool) error {
+// feed_version set to the current UTC timestamp (YYYYMMDD_HHMMSS).
+// startDate and endDate (YYYYMMDD, may be empty) are the validity window
+// computed from the services actually used by trips. For a directory output
+// the file is written directly; for a zip, the archive is rewritten.
+func injectFeedInfo(out string, isZip bool, startDate, endDate string) error {
 	feedVersion := time.Now().UTC().Format("20060102_150405")
 
 	content := "feed_publisher_name,feed_publisher_url,feed_lang,feed_version,feed_start_date,feed_end_date\n"
-	content += fmt.Sprintf("austria-gtfs-merger,https://github.com/PatrickSteil/austria-gtfs-merger,de,%s,,\n", feedVersion)
+	content += fmt.Sprintf("austria-gtfs-merger,https://github.com/PatrickSteil/austria-gtfs-merger,de,%s,%s,%s\n", feedVersion, startDate, endDate)
 
 	if !isZip {
 		return os.WriteFile(filepath.Join(out, "feed_info.txt"), []byte(content), 0o644)

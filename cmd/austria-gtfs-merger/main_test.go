@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/patrickbr/gtfsparser"
@@ -73,7 +74,7 @@ func TestInjectFeedInfo(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "x.zip")
 	f, _ := createZip(t, path, map[string]string{"stops.txt": "a", "feed_info.txt": "old"})
 	_ = f
-	if err := injectFeedInfo(path, true); err != nil {
+	if err := injectFeedInfo(path, true, "20260101", "20261231"); err != nil {
 		t.Fatal(err)
 	}
 	r, err := zip.OpenReader(path)
@@ -87,6 +88,9 @@ func TestInjectFeedInfo(t *testing.T) {
 		b, _ := io.ReadAll(rc)
 		rc.Close()
 		got[e.Name] = string(b)
+	}
+	if !strings.Contains(got["feed_info.txt"], ",20260101,20261231\n") {
+		t.Errorf("dates missing from feed_info: %q", got["feed_info.txt"])
 	}
 	if got["stops.txt"] != "a" || len(r.File) != 2 || got["feed_info.txt"] == "old" {
 		t.Errorf("unexpected archive contents: %v", got)
@@ -126,5 +130,42 @@ func TestExpandNestedZips(t *testing.T) {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("extracted file missing: %v", err)
 		}
+	}
+}
+
+func TestActiveRange(t *testing.T) {
+	feed := gtfsparser.NewFeed()
+	mk := func(id string, start, end gtfs.Date, days uint8) *gtfs.Service {
+		s := &gtfs.Service{}
+		s.SetId(id)
+		s.SetStart_date(start)
+		s.SetEnd_date(end)
+		s.SetRawDaymap(days)
+		s.SetExceptions(make(map[gtfs.Date]bool))
+		feed.Services[id] = s
+		return s
+	}
+	d := func(day, month uint8, year uint16) gtfs.Date { return gtfs.NewDate(day, month, year) }
+	const allDays = 0x7f
+
+	// 2026-03-02 (Mon) .. 2026-03-08 (Sun), plus an added day later on.
+	a := mk("a", d(2, 3, 2026), d(8, 3, 2026), allDays)
+	a.SetExceptionTypeOn(d(20, 6, 2026), 1)
+	// Not used by any trip: must not widen the range.
+	mk("unused", d(1, 1, 2020), d(1, 1, 2030), allDays)
+	// Used, but its only days are removed: no active day at all.
+	dead := mk("dead", d(1, 1, 2025), d(1, 1, 2025), allDays)
+	dead.SetExceptionTypeOn(d(1, 1, 2025), 2)
+
+	for _, svc := range []*gtfs.Service{a, dead} {
+		feed.Trips[svc.Id()] = &gtfs.Trip{Id: svc.Id(), Service: svc}
+	}
+
+	start, end := activeRange(feed)
+	if start != "20260302" || end != "20260620" {
+		t.Errorf("got %s-%s, want 20260302-20260620", start, end)
+	}
+	if s, e := activeRange(gtfsparser.NewFeed()); s != "" || e != "" {
+		t.Errorf("empty feed: got %q-%q", s, e)
 	}
 }
