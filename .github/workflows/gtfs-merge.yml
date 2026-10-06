@@ -71,7 +71,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add versions.json
+          git add versions.json merge-stats.json
           git diff --cached --quiet || git commit -m "chore: update GTFS version manifest [skip ci]"
           git push
 

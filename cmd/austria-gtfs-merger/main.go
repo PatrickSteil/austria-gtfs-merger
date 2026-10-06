@@ -42,6 +42,13 @@ func main() {
 	dropErrFlag := flag.BoolP("drop-erroneous", "e", false, "Drop erroneous GTFS entities")
 	manifestFlag := flag.StringP("manifest", "m", "versions.json", "Path to version manifest JSON")
 	forceFlag := flag.BoolP("force", "f", false, "Force re-merge even if no new data was downloaded")
+	statsFlag := flag.String("stats", "merge-stats.json", "File holding the previous run's feed statistics (empty disables the comparison)")
+	skipChecksFlag := flag.Bool("skip-checks", false, "Write the output even if the sanity checks fail")
+	var lim Limits
+	flag.IntVar(&lim.MinAgencies, "min-agencies", 50, "Sanity check: minimum number of agencies (0 disables)")
+	flag.IntVar(&lim.MinTrips, "min-trips", 500000, "Sanity check: minimum number of trips (0 disables)")
+	flag.IntVar(&lim.MinRailRoutes, "min-rail-routes", 200, "Sanity check: minimum number of rail routes (0 disables)")
+	flag.IntVar(&lim.MaxDropPct, "max-drop", 20, "Sanity check: maximum decrease in percent vs. the previous run (0 disables)")
 	allowParseErrFlag := flag.Bool("allow-parse-errors", false, "Continue merging if some feeds fail to parse (default: abort)")
 
 	flag.Parse()
@@ -168,14 +175,21 @@ func main() {
 	feed.SetParseOpts(opts)
 
 	parseErrors := 0
+	var problems []string
 	for i, file := range files {
 		if *verboseFlag {
 			log.Printf("parse   (%d/%d) %s", i+1, len(files), filepath.Base(file))
 		}
+		before := len(feed.Trips)
 		if err := feed.Parse(file); err != nil {
 			log.Printf("error   parsing %s: %v", file, err)
 			parseErrors++
 			continue
+		}
+		if added := len(feed.Trips) - before; added == 0 {
+			problems = append(problems, fmt.Sprintf("%s contributed no trips", filepath.Base(file)))
+		} else if *verboseFlag {
+			log.Printf("parse   %s added %d trip(s)", filepath.Base(file), added)
 		}
 	}
 
@@ -213,6 +227,30 @@ func main() {
 		len(feed.FareAttributes),
 	)
 
+	// ---- Sanity checks ----
+	//
+	// Refuse to write (and thus publish) a feed that looks incomplete.
+	cur := computeStats(feed)
+	var prev *Stats
+	if *statsFlag != "" {
+		var err error
+		if prev, err = loadStats(*statsFlag); err != nil {
+			log.Printf("warn    could not load previous stats: %v", err)
+		}
+	}
+	problems = append(problems, checkStats(cur, prev, lim)...)
+	log.Printf("stats   agencies=%d stops=%d routes=%d (rail=%d) trips=%d",
+		cur.Agencies, cur.Stops, cur.Routes, cur.RailRoutes, cur.Trips)
+	if len(problems) > 0 {
+		for _, p := range problems {
+			log.Printf("check   FAILED %s", p)
+		}
+		if !*skipChecksFlag {
+			log.Fatalf("error   %d sanity check(s) failed; not writing output (see --skip-checks)", len(problems))
+		}
+		log.Printf("warn    continuing despite failed checks (--skip-checks)")
+	}
+
 	if *outputFlag == "" {
 		return
 	}
@@ -244,6 +282,13 @@ func main() {
 		log.Printf("warn    could not inject feed_info.txt: %v", err)
 	} else {
 		log.Printf("done    injected feed_info.txt into %s", *outputFlag)
+	}
+
+	// Only a feed that passed the checks becomes the new baseline.
+	if *statsFlag != "" && len(problems) == 0 {
+		if err := saveStats(*statsFlag, cur); err != nil {
+			log.Printf("warn    could not save stats: %v", err)
+		}
 	}
 }
 

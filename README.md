@@ -56,6 +56,20 @@ Hence a complete call to `merger` (which downloads and merges the GTFS feeds), c
 DBP_USERNAME=user1 DBP_PASSWORD=hiddenpassword ./merger -d -o austria.merged.zip --drop-shapes --drop-erroneous
 ```
 
+### Sanity checks
+
+Before writing the output, the merger checks that the result looks complete and aborts (exit code 1, no file written) otherwise. This prevents publishing a feed that is silently missing a region or operator.
+
+| Check | Default | Flag |
+|---|---|---|
+| Every input feed contributes at least one trip | always | |
+| Minimum number of agencies | 50 | `--min-agencies` |
+| Minimum number of trips | 500000 | `--min-trips` |
+| Minimum number of rail routes (type 2 or 100-199) | 200 | `--min-rail-routes` |
+| Maximum drop of any count vs. the previous run | 20 % | `--max-drop` |
+
+The previous run's counts are stored in `merge-stats.json` (`--stats`), which is only updated after a feed passed all checks. Set a limit to `0` to disable it, or pass `--skip-checks` to write the output anyway. A feed that fails to parse also aborts the run unless `--allow-parse-errors` is given.
+
 ## Latest merged GTFS
 
 A daily merged GTFS feed is available here:
