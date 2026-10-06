@@ -31,15 +31,14 @@ jobs:
       - name: Build
         run: make
 
-      # Run the merger. The binary exits 0 in all cases:
-      #   - exit 0 + "nothing to do"  → no new data, skip release
-      #   - exit 0 + merged file written → new data, proceed to release
-      # We detect which happened by checking whether versions.json changed.
+      # Run the merger. A non-zero exit (failed download or parse error) fails
+      # the job, so nothing is committed or released. On success we detect
+      # whether new data was merged by checking whether versions.json changed.
       - name: Run GTFS merger
         id: merge
         env:
-          USERNAME: ${{ secrets.GTFS_USERNAME }}
-          PASSWORD: ${{ secrets.GTFS_PASSWORD }}
+          DBP_USERNAME: ${{ secrets.GTFS_USERNAME }}
+          DBP_PASSWORD: ${{ secrets.GTFS_PASSWORD }}
         run: |
           FORCE_FLAG=""
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
@@ -49,7 +48,6 @@ jobs:
             --manifest versions.json \
             --output austria.merged.zip \
             $FORCE_FLAG
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
       # Check whether the manifest changed (= at least one feed was updated).
       - name: Check for changes
@@ -87,6 +85,10 @@ jobs:
           path: austria.merged.zip
           retention-days: 7
 
+      - name: Timestamp
+        id: stamp
+        run: echo "utc=$(date -u +'%Y-%m-%d %H:%M UTC')" >> "$GITHUB_OUTPUT"
+
       # Update (or create) a rolling "latest" release so there is always a
       # stable permalink:
       #   https://github.com/<owner>/<repo>/releases/download/latest/austria.merged.zip
@@ -102,7 +104,7 @@ jobs:
           body: |
             Automatically updated merged GTFS feed for Austria.
 
-            **Last updated:** ${{ github.run_id }} · `${{ github.sha }}`
+            **Last updated:** ${{ steps.stamp.outputs.utc }} · `${{ github.sha }}`
 
             ### Permalink
             ```

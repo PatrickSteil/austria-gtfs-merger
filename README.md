@@ -48,12 +48,12 @@ Usage:
 
 ### Username and Password
 Note that in order to automatically download all the GTFS feeds from [data.mobilitaetsverbuende.at](https://data.mobilitaetsverbuende.at/), you need to have an account (i.e., username and password).
-These must be set as environment variables USERNAME and PASSWORD.
+These must be set as environment variables `DBP_USERNAME` and `DBP_PASSWORD` (or in a `.env` file).
 
 Hence a complete call to `merger` (which downloads and merges the GTFS feeds), could look like this:
 
 ```bash
-USERNAME=user1 PASSWORD=hiddenpassword ./merger -d -o austria.merged.zip --drop-shapes --drop-erroneous
+DBP_USERNAME=user1 DBP_PASSWORD=hiddenpassword ./merger -d -o austria.merged.zip --drop-shapes --drop-erroneous
 ```
 
 ## Latest merged GTFS
