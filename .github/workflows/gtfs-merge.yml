@@ -75,6 +75,37 @@ jobs:
           git diff --cached --quiet || git commit -m "chore: update GTFS version manifest [skip ci]"
           git push
 
+      # Clean the merged feed with gtfstidy (fork), used as a CLI: removes
+      # non-essential data, drops erroneous entries / unreferenced entities and
+      # minimizes services, which also makes the zip considerably smaller.
+      # The fork's go.mod still declares the upstream module path, so
+      # `go install` does not work; clone and build instead.
+      - name: Tidy merged GTFS with gtfstidy
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git clone --depth 1 https://github.com/PatrickSteil/gtfstidy.git "$RUNNER_TEMP/gtfstidy"
+          (cd "$RUNNER_TEMP/gtfstidy" && go build -o "$GITHUB_WORKSPACE/gtfstidy" .)
+          ./gtfstidy \
+            --fix \
+            --drop-non-essential \
+            --drop-errs \
+            --delete-orphans \
+            --keep-ids \
+            --fix-trip-headsigns \
+            --fix-far-away-parents \
+            --drop-too-fast-trips \
+            --drop-single-stop-trips \
+            --minimize-services \
+            -o austria.tidy.zip \
+            austria.merged.zip
+          # --drop-non-essential removes feed_info.txt, but the release notes
+          # rely on its feed_version for cheap version checks: put it back.
+          mkdir feed-info
+          unzip -p austria.merged.zip feed_info.txt > feed-info/feed_info.txt
+          zip -j austria.tidy.zip feed-info/feed_info.txt
+          mv austria.tidy.zip austria.merged.zip
+          ls -lh austria.merged.zip
+
       # Always upload as a workflow artifact (available for 7 days, useful for
       # debugging even when no release is cut).
       - name: Upload merged GTFS artifact
