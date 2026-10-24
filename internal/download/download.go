@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/PatrickSteil/austria-gtfs-merger/internal/auth"
+	"github.com/PatrickSteil/austria-gtfs-merger/internal/dbptls"
 	"github.com/PatrickSteil/austria-gtfs-merger/internal/models"
 )
 
@@ -56,7 +57,7 @@ func SaveManifest(path string, m models.Manifest) error {
 // httpClient is shared across downloads. The 10-minute timeout accommodates
 // large GTFS zips (ÖBB, VOR, etc.) that can exceed 100 MB on slow uplinks
 // from the DBP servers. 90 s was observed to be too short in production.
-var httpClient = &http.Client{Timeout: 10 * time.Minute}
+var httpClient = &http.Client{Timeout: 10 * time.Minute, Transport: dbptls.Transport()}
 
 const maxAttempts = 3
 

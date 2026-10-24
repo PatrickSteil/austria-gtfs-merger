@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/PatrickSteil/austria-gtfs-merger/internal/dbptls"
 )
 
 const (
@@ -30,7 +32,7 @@ func NewAuth(username, password string) *DBPAuth {
 	return &DBPAuth{
 		Username: username,
 		Password: password,
-		client:   &http.Client{Timeout: 30 * time.Second},
+		client:   &http.Client{Timeout: 30 * time.Second, Transport: dbptls.Transport()},
 	}
 }
 
