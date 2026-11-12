@@ -224,16 +224,22 @@ func main() {
 	}
 
 	var reports []enrich.Report
-	_ = osmFeaturesFlag
+	osmUsed := false
 	if steps.Platforms {
 		reports = append(reports, enrich.Platforms(feed))
 	}
 	if steps.Routes {
 		reports = append(reports, enrich.Routes(feed, enrich.RouteOptions{ExtendedTypes: *extTypesFlag}))
 	}
+	if steps.Wheelchair {
+		rep := runWheelchair(feed, *osmFeaturesFlag)
+		reports = append(reports, rep)
+		osmUsed = rep.Skipped == ""
+	}
 	for _, r := range reports {
 		log.Printf("enrich  %s changed=%d", r.Step, r.Changed)
 	}
+	log.Printf("info    OSM data used: %v", osmUsed)
 	if err := enrich.WriteReports(*enrichReportFlag, reports); err != nil {
 		log.Printf("warn    could not write enrichment report: %v", err)
 	}
