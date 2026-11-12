@@ -44,7 +44,7 @@ jobs:
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             FORCE_FLAG="--force"
           fi
-          ./merger -d -e --drop-shapes \
+          ./merger -d -e -v --drop-shapes \
             --manifest versions.json \
             --output austria.merged.zip \
             $FORCE_FLAG

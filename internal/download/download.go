@@ -184,22 +184,11 @@ func DownloadAllDatasets(username, password string, outDir string, maxWorkers in
 		return DownloadResult{}, fmt.Errorf("fetching datasets: %w", err)
 	}
 
-	remote := make(models.Manifest)
-	var jobs []job
-	for _, ds := range datasets {
-		if !auth.IsGTFS(ds) || len(ds.ActiveVersions) == 0 {
-			continue
-		}
-		if len(ds.ActiveVersions) > 1 {
-			log.Printf("warn    dataset %s has %d active versions; using the first", ds.ID, len(ds.ActiveVersions))
-		}
-		v := ds.ActiveVersions[0]
-		remote[ds.ID] = models.ManifestEntry{
-			Year:         v.Year,
-			OriginalName: v.DataSetVersion.File.OriginalName,
-		}
-		jobs = append(jobs, job{id: ds.ID, year: v.Year, name: v.DataSetVersion.File.OriginalName})
-	}
+	wanted := timetableYear(time.Now())
+	log.Printf("info    timetable year in force: %d", wanted)
+	remote, jobs := selectVersions(datasets, wanted, func(id, year string) (string, error) {
+		return ProbeVersion(aut, id, year)
+	})
 
 	changed := !maps.Equal(remote, manifest)
 	if !changed && !force {
