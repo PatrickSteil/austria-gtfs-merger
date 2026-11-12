@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"log"
@@ -274,6 +275,18 @@ func main() {
 	log.Printf("stats   agencies=%d stops=%d routes=%d (rail=%d) trips=%d",
 		cur.Agencies, cur.Stops, cur.Routes, cur.RailRoutes, cur.Trips)
 	log.Printf("stats   route types: %s", strings.Join(routeTypeCounts(feed), " "))
+	log.Printf("stats   extended route types=%d stops with wheelchair_boarding=%d", cur.ExtendedRouteTypes, cur.WheelchairKnown)
+	wheelchairSkipped := steps.Wheelchair && !osmUsed
+	for _, w := range warnings(cur, prev, wheelchairSkipped) {
+		log.Printf("warn    %s", w)
+		if os.Getenv("GITHUB_ACTIONS") == "true" {
+			fmt.Printf("::warning::%s\n", w)
+		}
+	}
+	if wheelchairSkipped && prev != nil {
+		// Keep the last real baseline so the next run can still notice a gap.
+		cur.WheelchairKnown = prev.WheelchairKnown
+	}
 	if len(problems) > 0 {
 		for _, p := range problems {
 			log.Printf("check   FAILED %s", p)
@@ -313,7 +326,7 @@ func main() {
 
 	startDate, endDate := activeRange(feed)
 	log.Printf("info    service dates %s - %s", startDate, endDate)
-	if err := injectFeedInfo(*outputFlag, isZip, startDate, endDate); err != nil {
+	if err := injectFeedInfo(*outputFlag, isZip, startDate, endDate, osmUsed); err != nil {
 		log.Printf("warn    could not inject feed_info.txt: %v", err)
 	} else {
 		log.Printf("done    injected feed_info.txt into %s", *outputFlag)
@@ -581,14 +594,43 @@ func parentStationID(stopID string) string {
 // startDate and endDate (YYYYMMDD, may be empty) are the validity window
 // computed from the services actually used by trips. For a directory output
 // the file is written directly; for a zip, the archive is rewritten.
-func injectFeedInfo(out string, isZip bool, startDate, endDate string) error {
+func injectFeedInfo(out string, isZip bool, startDate, endDate string, osmUsed bool) error {
 	feedVersion := time.Now().UTC().Format("20060102_150405")
 
-	content := "feed_publisher_name,feed_publisher_url,feed_lang,feed_version,feed_start_date,feed_end_date\n"
-	content += fmt.Sprintf("austria-gtfs-merger,https://github.com/PatrickSteil/austria-gtfs-merger,de,%s,%s,%s\n", feedVersion, startDate, endDate)
+	publisher := "austria-gtfs-merger"
+	if osmUsed {
+		publisher += "; contains data " + osmAttribution
+	}
+	var info strings.Builder
+	cw := csv.NewWriter(&info)
+	cw.Write([]string{"feed_publisher_name", "feed_publisher_url", "feed_lang", "feed_version", "feed_start_date", "feed_end_date"})
+	cw.Write([]string{publisher, "https://github.com/PatrickSteil/austria-gtfs-merger", "de", feedVersion, startDate, endDate})
+	cw.Flush()
+
+	files := map[string]string{"feed_info.txt": info.String()}
+	if osmUsed {
+		files["attributions.txt"] = "attribution_id,organization_name,is_producer,is_operator,is_authority,attribution_url\n" +
+			"osm,OpenStreetMap contributors,0,0,0,https://www.openstreetmap.org/copyright\n"
+	}
+	return replaceFiles(out, isZip, files)
+}
+
+// replaceFiles writes the given files into the output directory, or into the
+// zip archive (replacing entries of the same name, copying all others as they are).
+func replaceFiles(out string, isZip bool, files map[string]string) error {
+	names := make([]string, 0, len(files))
+	for n := range files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
 
 	if !isZip {
-		return os.WriteFile(filepath.Join(out, "feed_info.txt"), []byte(content), 0o644)
+		for _, n := range names {
+			if err := os.WriteFile(filepath.Join(out, n), []byte(files[n]), 0o644); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	r, err := zip.OpenReader(out)
@@ -612,20 +654,21 @@ func injectFeedInfo(out string, isZip bool, startDate, endDate string) error {
 
 	w := zip.NewWriter(outFile)
 	for _, f := range r.File {
-		if f.Name == "feed_info.txt" {
+		if _, replaced := files[f.Name]; replaced {
 			continue
 		}
 		if err := w.Copy(f); err != nil { // raw copy, no recompression
 			return fmt.Errorf("copy entry %s: %w", f.Name, err)
 		}
 	}
-
-	fw, err := w.Create("feed_info.txt")
-	if err != nil {
-		return err
-	}
-	if _, err := io.WriteString(fw, content); err != nil {
-		return fmt.Errorf("write feed_info.txt: %w", err)
+	for _, n := range names {
+		fw, err := w.Create(n)
+		if err != nil {
+			return err
+		}
+		if _, err := io.WriteString(fw, files[n]); err != nil {
+			return fmt.Errorf("write %s: %w", n, err)
+		}
 	}
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("finalise zip: %w", err)
@@ -636,3 +679,6 @@ func injectFeedInfo(out string, isZip bool, startDate, endDate string) error {
 	ok = true
 	return os.Rename(tmp, out)
 }
+
+// osmAttribution is the attribution required for OSM-derived data (ODbL).
+const osmAttribution = "\u00a9 OpenStreetMap contributors (ODbL)"

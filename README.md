@@ -38,6 +38,10 @@ Version dev
 Usage:
       --dir string       GTFS directory (default "gtfs_feeds")
   -d, --download         Download GTFS datasets
+      --enrich string    Enrichment steps: steig, routes, wheelchair, all (default "steig,routes")
+      --enrich-report string  Where to write the enrichment report (default "enrich-report.json")
+      --extended-route-types  Write extended (HVT) route_type values
+      --osm-features string  OSM features file from osm-extract (enables the wheelchair step)
   -e, --drop-erroneous   Drop erroneous GTFS entities
   -s, --drop-shapes      Drop shapes.txt data
   -o, --output string    Output path (directory or .zip) for merged GTFS (default "merged.zip")
@@ -69,6 +73,30 @@ Before writing the output, the merger checks that the result looks complete and 
 | Maximum drop of any count vs. the previous run | 20 % | `--max-drop` |
 
 The previous run's counts are stored in `merge-stats.json` (`--stats`), which is only updated after a feed passed all checks. Set a limit to `0` to disable it, or pass `--skip-checks` to write the output anyway. A feed that fails to parse also aborts the run unless `--allow-parse-errors` is given.
+
+## Enrichment
+
+After merging, optional steps derive data the source feeds do not provide. Each step only fills empty fields (or fixes clearly recognised patterns), never overwrites source values silently, and reports what it did in `enrich-report.json`.
+
+| Step | Flag value | What it does |
+|---|---|---|
+| Platform names | `steig` | Boarding stops that are only named after their platform (`13A`, `1,2`, `G1`) get the station name; the platform moves to `platform_code`. |
+| Route metadata | `routes` | The product category from `trip_short_name` (RJX, ICE, REX, S, ...) fills `route_desc` and, for rail, `route_color`/`route_text_color`. With `--extended-route-types`, rail routes get HVT types (101 high speed, 102 long distance, 103 inter-regional, 105 sleeper, 106 regional, 109 S-Bahn), rail replacement buses 714, cable cars 6. |
+| Wheelchair | `wheelchair` | `wheelchair_boarding` from OpenStreetMap `wheelchair=*` tags of nearby platforms and stops. Needs `--osm-features`. Unknown or ambiguous cases stay `0`. |
+
+The OSM features file is built from a Geofabrik extract:
+
+```bash
+curl -O https://download.geofabrik.de/europe/austria-latest.osm.pbf
+go run ./cmd/osm-extract --pbf austria-latest.osm.pbf --out osm-features.json.gz
+./merger --enrich all --extended-route-types --osm-features osm-features.json.gz ...
+```
+
+If the OSM step cannot run, the feed is still written (without `wheelchair_boarding`) and a warning is logged.
+
+## Attribution
+
+This feed contains data derived from OpenStreetMap: © OpenStreetMap contributors, available under the [Open Database License (ODbL)](https://www.openstreetmap.org/copyright). The attribution is also part of the feed itself (`feed_info.txt` and `attributions.txt`) whenever the OSM step ran.
 
 ## Latest merged GTFS
 

@@ -74,7 +74,7 @@ func TestInjectFeedInfo(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "x.zip")
 	f, _ := createZip(t, path, map[string]string{"stops.txt": "a", "feed_info.txt": "old"})
 	_ = f
-	if err := injectFeedInfo(path, true, "20260101", "20261231"); err != nil {
+	if err := injectFeedInfo(path, true, "20260101", "20261231", false); err != nil {
 		t.Fatal(err)
 	}
 	r, err := zip.OpenReader(path)
@@ -94,6 +94,46 @@ func TestInjectFeedInfo(t *testing.T) {
 	}
 	if got["stops.txt"] != "a" || len(r.File) != 2 || got["feed_info.txt"] == "old" {
 		t.Errorf("unexpected archive contents: %v", got)
+	}
+}
+
+func TestInjectFeedInfoAttribution(t *testing.T) {
+	read := func(osmUsed bool) map[string]string {
+		path := filepath.Join(t.TempDir(), "x.zip")
+		createZip(t, path, map[string]string{"stops.txt": "a"})
+		if err := injectFeedInfo(path, true, "20260101", "20261231", osmUsed); err != nil {
+			t.Fatal(err)
+		}
+		r, err := zip.OpenReader(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Close()
+		got := map[string]string{}
+		for _, e := range r.File {
+			rc, _ := e.Open()
+			b, _ := io.ReadAll(rc)
+			rc.Close()
+			got[e.Name] = string(b)
+		}
+		return got
+	}
+
+	with := read(true)
+	if !strings.Contains(with["feed_info.txt"], "© OpenStreetMap contributors (ODbL)") {
+		t.Errorf("attribution missing from feed_info: %q", with["feed_info.txt"])
+	}
+	if !strings.Contains(with["attributions.txt"], "OpenStreetMap contributors") ||
+		!strings.Contains(with["attributions.txt"], "https://www.openstreetmap.org/copyright") {
+		t.Errorf("attributions.txt = %q", with["attributions.txt"])
+	}
+
+	without := read(false)
+	if _, ok := without["attributions.txt"]; ok {
+		t.Error("attributions.txt written although OSM was not used")
+	}
+	if strings.Contains(without["feed_info.txt"], "OpenStreetMap") {
+		t.Errorf("attribution present although OSM was not used: %q", without["feed_info.txt"])
 	}
 }
 
