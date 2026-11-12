@@ -3,3 +3,6 @@ merger
 austria.merged.zip
 *.tmp
 .env
+osm-features.json.gz
+enrich-report.json
+*.osm.pbf

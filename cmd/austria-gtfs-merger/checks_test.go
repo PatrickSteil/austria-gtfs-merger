@@ -4,6 +4,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/patrickbr/gtfsparser"
+	gtfs "github.com/patrickbr/gtfsparser/gtfs"
 )
 
 func TestCheckStats(t *testing.T) {
@@ -48,5 +51,37 @@ func TestStatsRoundTrip(t *testing.T) {
 	got, err := loadStats(path)
 	if err != nil || got == nil || *got != want {
 		t.Fatalf("got %v, %v", got, err)
+	}
+}
+
+func TestWarnings(t *testing.T) {
+	prev := &Stats{WheelchairKnown: 1000}
+	for name, c := range map[string]struct {
+		cur     Stats
+		prev    *Stats
+		skipped bool
+		want    int
+	}{
+		"big drop":          {Stats{WheelchairKnown: 700}, prev, false, 1},
+		"small drop":        {Stats{WheelchairKnown: 900}, prev, false, 0},
+		"skipped":           {Stats{WheelchairKnown: 0}, prev, true, 1},
+		"no previous":       {Stats{WheelchairKnown: 0}, nil, true, 0},
+		"previous had none": {Stats{WheelchairKnown: 0}, &Stats{}, true, 0},
+	} {
+		if got := warnings(c.cur, c.prev, c.skipped); len(got) != c.want {
+			t.Errorf("%s: got %v, want %d warning(s)", name, got, c.want)
+		}
+	}
+}
+
+func TestComputeStatsEnrichment(t *testing.T) {
+	feed := gtfsparser.NewFeed()
+	feed.Routes["a"] = &gtfs.Route{Id: "a", Type: 101}
+	feed.Routes["b"] = &gtfs.Route{Id: "b", Type: 2}
+	feed.Stops["s1"] = &gtfs.Stop{Id: "s1", Wheelchair_boarding: 1}
+	feed.Stops["s2"] = &gtfs.Stop{Id: "s2"}
+	s := computeStats(feed)
+	if s.ExtendedRouteTypes != 1 || s.WheelchairKnown != 1 {
+		t.Errorf("stats = %+v", s)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/PatrickSteil/austria-gtfs-merger/internal/enrich"
 	"github.com/patrickbr/gtfsparser"
 )
 
@@ -16,6 +17,10 @@ type Stats struct {
 	Routes     int `json:"routes"`
 	Trips      int `json:"trips"`
 	RailRoutes int `json:"rail_routes"`
+	// WheelchairKnown is the number of stops with wheelchair_boarding != 0.
+	WheelchairKnown int `json:"wheelchair_known"`
+	// ExtendedRouteTypes is the number of routes with an extended (>= 100) type.
+	ExtendedRouteTypes int `json:"extended_route_types"`
 }
 
 // Limits bounds what a plausible merged feed looks like. A zero value
@@ -42,7 +47,11 @@ func computeStats(feed *gtfsparser.Feed) Stats {
 		if r.Type == 2 || (r.Type >= 100 && r.Type < 200) {
 			s.RailRoutes++
 		}
+		if r.Type >= 100 {
+			s.ExtendedRouteTypes++
+		}
 	}
+	s.WheelchairKnown = enrich.WheelchairKnown(feed)
 	return s
 }
 
@@ -104,4 +113,20 @@ func saveStats(path string, s Stats) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// warnings returns non-blocking notices about the enrichment: the OSM step was
+// skipped although the previous run had wheelchair data, or the number of
+// stops with wheelchair data fell by more than 20 %. They never stop a release.
+func warnings(cur Stats, prev *Stats, wheelchairSkipped bool) []string {
+	if prev == nil || prev.WheelchairKnown == 0 {
+		return nil
+	}
+	var w []string
+	if wheelchairSkipped {
+		w = append(w, fmt.Sprintf("wheelchair step was skipped; the previous run had %d stops with wheelchair_boarding", prev.WheelchairKnown))
+	} else if cur.WheelchairKnown*100 < prev.WheelchairKnown*80 {
+		w = append(w, fmt.Sprintf("stops with wheelchair_boarding fell from %d to %d (more than 20%%)", prev.WheelchairKnown, cur.WheelchairKnown))
+	}
+	return w
 }
