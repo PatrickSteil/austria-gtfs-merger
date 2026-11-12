@@ -228,3 +228,21 @@ Folgen für den Entwurf:
 PBF-Bibliothek bzw. Streaming-Methode (Speicher unter ca. 2 GB, Laufzeit wenige
 Minuten), räumlicher Index, genaue Regex, Datenformat der Zwischendatei,
 Struktur der Tabellen, Aufteilung in Commits.
+
+## Nachtrag: Trennung nach Lizenz (2026-11-12)
+
+Nach der Lizenzprüfung (OSM-Auszug mit rund 8 000 übernommenen Werten gilt als
+"substanziell", `stops.txt` damit als abgeleitete Datenbank) wird
+`wheelchair_boarding` nicht mehr in den Hauptfeed geschrieben:
+
+- `austria.merged.zip` (Permalink unverändert) enthält keine OSM-Daten.
+- `austria.merged.osm.zip` ist derselbe Feed plus `wheelchair_boarding`;
+  `stops.txt` wird unter ODbL angeboten. Erzeugt über `--wheelchair-output`.
+- Der Schritt `wheelchair` läuft nur zusammen mit `--wheelchair-output`; der
+  Merger bricht sonst ab. Die Variante wird nach dem Hauptfeed aus derselben
+  Feed-Struktur geschrieben.
+- Fehlt OSM, wird kein OSM-Asset erzeugt und ein altes Asset aus dem Release
+  entfernt.
+- Offen und nicht geprüft: ob die Lizenz der Mobilitätsverbünde (eigene
+  Lizenz, an CC BY angelehnt) die Weitergabe in einer Datei mit ODbL-Anteil
+  erlaubt, und der genaue Wortlaut der geforderten Namensnennung.

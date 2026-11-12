@@ -108,7 +108,7 @@ A merged GTFS feed is built daily. Both files are assets of the rolling `latest`
 | [`austria.merged.zip`](https://github.com/PatrickSteil/austria-gtfs-merger/releases/download/latest/austria.merged.zip) (permalink, unchanged) | Merged Mobilitätsverbünde feeds plus our rule-based enrichment. **No OpenStreetMap data.** | Terms of the Mobilitätsverbünde Österreich data licence |
 | [`austria.merged.osm.zip`](https://github.com/PatrickSteil/austria-gtfs-merger/releases/download/latest/austria.merged.osm.zip) | The same feed plus `wheelchair_boarding` in `stops.txt`, derived from OpenStreetMap. | `stops.txt`: ODbL, © OpenStreetMap contributors. All other files: as above. |
 
-The two files differ only by the wheelchair data (plus the attribution files described below). `enrich-report.json` in the same release lists what the enrichment steps changed. If a run has no OpenStreetMap data, `austria.merged.osm.zip` is removed from the release instead of being left outdated.
+Both files are built from the same merged feed; the OSM variant only adds the wheelchair data and the attribution files described below. `enrich-report.json` in the same release lists what the enrichment steps changed. If a run has no OpenStreetMap data, `austria.merged.osm.zip` is removed from the release instead of being left outdated.
 
 [All releases](https://github.com/PatrickSteil/austria-gtfs-merger/releases)
 
@@ -116,7 +116,7 @@ The two files differ only by the wheelchair data (plus the attribution files des
 
 | Data | Source | Used for |
 |---|---|---|
-| GTFS datasets of the Austrian transport associations | [data.mobilitaetsverbuende.at](https://data.mobilitaetsverbuende.at/) (Mobilitätsverbünde Österreich), downloaded with the operator's own account and used under their data licence | Everything in both files: agencies, stops, routes, trips, times, calendars, transfers, pathways |
+| GTFS datasets of the Austrian transport associations | [data.mobilitaetsverbuende.at](https://data.mobilitaetsverbuende.at/) (Mobilitätsverbünde Österreich), downloaded with an account of this repository's owner and used under the platform's data licence | Everything in both files: agencies, stops, routes, trips, times, calendars, transfers, pathways |
 | OpenStreetMap | [Geofabrik](https://download.geofabrik.de/europe/austria.html) extract of Austria, © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/1-0/) | Only the `wheelchair=*` tag, only for `wheelchair_boarding`, only in `austria.merged.osm.zip` |
 | Our own rules | This repository (GPL-2.0) | Product categories, route types, colors, platform names; no external data |
 
