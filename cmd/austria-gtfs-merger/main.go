@@ -54,8 +54,10 @@ func main() {
 
 	enrichFlag := flag.String("enrich", "steig,routes", "Enrichment steps: steig, routes, wheelchair, all (comma separated, empty disables)")
 	extTypesFlag := flag.Bool("extended-route-types", false, "Write extended (HVT) route_type values for rail, replacement bus and cable cars")
-	osmFeaturesFlag := flag.String("osm-features", "", "OSM accessibility features file produced by osm-extract (enables the wheelchair step)")
-	wheelchairOutFlag := flag.String("wheelchair-output", "", "Second output (.zip or directory) that additionally contains the OSM-derived wheelchair_boarding values (ODbL); the main output never does")
+	osmFeaturesFlag := flag.String("osm-features", "", "OSM features file produced by osm-extract (input of the OpenStreetMap steps)")
+	osmRoutesFlag := flag.String("osm-routes", "", "OSM route relations file produced by osm-extract (input of the osmroutes step)")
+	osmSidecarFlag := flag.String("osm-sidecar-dir", "", "Directory for the OSM stop attribute sidecar and the QA report (both OSM-derived, ODbL)")
+	osmOutFlag := flag.String("osm-output", "", "Second output (.zip or directory) with the OSM-derived data (ODbL); the main output never contains OSM data")
 	enrichReportFlag := flag.String("enrich-report", "enrich-report.json", "Where to write the enrichment report (empty disables)")
 
 	flag.Parse()
@@ -66,7 +68,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error   %v", err)
 	}
-	if err := validateEnrichFlags(steps, *wheelchairOutFlag); err != nil {
+	if err := validateEnrichFlags(steps, *osmOutFlag); err != nil {
 		log.Fatalf("error   %v", err)
 	}
 
@@ -231,8 +233,11 @@ func main() {
 	if steps.Platforms {
 		reports = append(reports, enrich.Platforms(feed))
 	}
+	var palette map[string]bool
 	if steps.Routes {
-		reports = append(reports, enrich.Routes(feed, enrich.RouteOptions{ExtendedTypes: *extTypesFlag}))
+		routesRep := enrich.Routes(feed, enrich.RouteOptions{ExtendedTypes: *extTypesFlag})
+		palette = routesRep.PaletteRoutes
+		reports = append(reports, routesRep)
 	}
 	for _, r := range reports {
 		log.Printf("enrich  %s changed=%d", r.Step, r.Changed)
@@ -295,32 +300,39 @@ func main() {
 
 	// ---- OSM-derived variant ----
 	//
-	// wheelchair_boarding comes from OpenStreetMap (ODbL). It goes into a
-	// second output only, after the main feed has been written, so the main
-	// feed never contains OSM-derived data.
-	if steps.Wheelchair {
-		rep := runWheelchair(feed, *osmFeaturesFlag)
-		reports = append(reports, rep)
-		log.Printf("enrich  %s changed=%d", rep.Step, rep.Changed)
-		osmUsed := rep.Skipped == ""
+	// Everything derived from OpenStreetMap (ODbL) goes into a second output
+	// only, after the main feed has been written, so the main feed never
+	// contains OSM-derived data.
+	if steps.NeedsOSM() {
+		osmReports, osmUsed := runOSM(feed, steps, osmInputs{
+			FeaturesPath: *osmFeaturesFlag, RoutesPath: *osmRoutesFlag, SidecarDir: *osmSidecarFlag,
+		}, palette)
+		reports = append(reports, osmReports...)
+		for _, r := range osmReports {
+			log.Printf("enrich  %s changed=%d", r.Step, r.Changed)
+		}
 		if osmUsed {
-			if err := writeFeed(feed, *wheelchairOutFlag, true); err != nil {
+			if err := writeFeed(feed, *osmOutFlag, true); err != nil {
 				log.Fatalf("error   %v", err)
 			}
-			cur.WheelchairKnown = enrich.WheelchairKnown(feed)
-		} else if err := os.RemoveAll(*wheelchairOutFlag); err != nil {
-			log.Printf("warn    could not remove stale %s: %v", *wheelchairOutFlag, err)
+		} else if err := os.RemoveAll(*osmOutFlag); err != nil {
+			log.Printf("warn    could not remove stale %s: %v", *osmOutFlag, err)
 		}
-		log.Printf("stats   stops with wheelchair_boarding=%d", cur.WheelchairKnown)
-		for _, w := range warnings(cur, prev, !osmUsed) {
-			log.Printf("warn    %s", w)
-			if os.Getenv("GITHUB_ACTIONS") == "true" {
-				fmt.Printf("::warning::%s\n", w)
+		if steps.Wheelchair {
+			if osmUsed {
+				cur.WheelchairKnown = enrich.WheelchairKnown(feed)
 			}
-		}
-		if !osmUsed && prev != nil {
-			// Keep the last real baseline so the next run can still notice a gap.
-			cur.WheelchairKnown = prev.WheelchairKnown
+			log.Printf("stats   stops with wheelchair_boarding=%d", cur.WheelchairKnown)
+			for _, w := range warnings(cur, prev, !osmUsed) {
+				log.Printf("warn    %s", w)
+				if os.Getenv("GITHUB_ACTIONS") == "true" {
+					fmt.Printf("::warning::%s\n", w)
+				}
+			}
+			if !osmUsed && prev != nil {
+				// Keep the last real baseline so the next run can still notice a gap.
+				cur.WheelchairKnown = prev.WheelchairKnown
+			}
 		}
 		if err := enrich.WriteReports(*enrichReportFlag, reports); err != nil {
 			log.Printf("warn    could not write enrichment report: %v", err)

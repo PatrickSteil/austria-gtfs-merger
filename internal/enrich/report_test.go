@@ -13,9 +13,10 @@ func TestParseSteps(t *testing.T) {
 		want    Steps
 		wantErr bool
 	}{
-		{"all", Steps{true, true, true}, false},
+		{"all", Steps{Platforms: true, Routes: true, Wheelchair: true, PlatformCodes: true, OSMRoutes: true, Entrances: true}, false},
 		{"steig,routes", Steps{Platforms: true, Routes: true}, false},
 		{"wheelchair", Steps{Wheelchair: true}, false},
+		{"platformcodes,osmroutes,entrances", Steps{PlatformCodes: true, OSMRoutes: true, Entrances: true}, false},
 		{"", Steps{}, false},
 		{"foo", Steps{}, true},
 	}
@@ -67,5 +68,23 @@ func TestWriteReports(t *testing.T) {
 
 	if err := WriteReports("", in); err != nil {
 		t.Errorf("empty path should be a no-op, got %v", err)
+	}
+}
+
+func TestNeedsOSM(t *testing.T) {
+	for name, c := range map[string]struct {
+		s    Steps
+		want bool
+	}{
+		"none":          {Steps{}, false},
+		"rule based":    {Steps{Platforms: true, Routes: true}, false},
+		"wheelchair":    {Steps{Wheelchair: true}, true},
+		"platformcodes": {Steps{PlatformCodes: true}, true},
+		"osmroutes":     {Steps{OSMRoutes: true}, true},
+		"entrances":     {Steps{Entrances: true}, true},
+	} {
+		if got := c.s.NeedsOSM(); got != c.want {
+			t.Errorf("%s: NeedsOSM = %v, want %v", name, got, c.want)
+		}
 	}
 }

@@ -64,28 +64,42 @@ func WriteReports(path string, reports []Report) error {
 	return os.WriteFile(path, append(data, '\n'), 0o644)
 }
 
-// Steps selects which enrichment steps run.
+// Steps selects which enrichment steps run. Platforms and Routes only use the
+// GTFS feeds; the others use OpenStreetMap data.
 type Steps struct {
-	Platforms, Routes, Wheelchair bool
+	Platforms, Routes                               bool
+	Wheelchair, PlatformCodes, OSMRoutes, Entrances bool
 }
 
-// ParseSteps parses "all" or a comma separated list of steig, routes and
-// wheelchair. The empty string selects nothing.
+// NeedsOSM reports whether any selected step uses OpenStreetMap data.
+func (s Steps) NeedsOSM() bool {
+	return s.Wheelchair || s.PlatformCodes || s.OSMRoutes || s.Entrances
+}
+
+// ParseSteps parses "all" or a comma separated list of steig, routes,
+// wheelchair, platformcodes, osmroutes and entrances. The empty string selects
+// nothing.
 func ParseSteps(spec string) (Steps, error) {
 	var s Steps
 	for _, part := range strings.Split(spec, ",") {
 		switch strings.TrimSpace(part) {
 		case "":
 		case "all":
-			s = Steps{true, true, true}
+			s = Steps{Platforms: true, Routes: true, Wheelchair: true, PlatformCodes: true, OSMRoutes: true, Entrances: true}
 		case "steig":
 			s.Platforms = true
 		case "routes":
 			s.Routes = true
 		case "wheelchair":
 			s.Wheelchair = true
+		case "platformcodes":
+			s.PlatformCodes = true
+		case "osmroutes":
+			s.OSMRoutes = true
+		case "entrances":
+			s.Entrances = true
 		default:
-			return Steps{}, fmt.Errorf("unknown enrichment step %q (want steig, routes, wheelchair or all)", part)
+			return Steps{}, fmt.Errorf("unknown enrichment step %q (want steig, routes, wheelchair, platformcodes, osmroutes, entrances or all)", part)
 		}
 	}
 	return s, nil
