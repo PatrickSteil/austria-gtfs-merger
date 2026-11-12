@@ -102,16 +102,20 @@ jobs:
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             FORCE_FLAG="--force"
           fi
-          OSM_FLAG=""
+          # austria.merged.zip never contains OpenStreetMap data. The OSM-derived
+          # wheelchair_boarding values (ODbL) go into austria.merged.osm.zip.
+          ENRICH="steig,routes"
+          OSM_ARGS=""
           if [ -s osm-features.json.gz ]; then
-            OSM_FLAG="--osm-features osm-features.json.gz"
+            ENRICH="all"
+            OSM_ARGS="--osm-features osm-features.json.gz --wheelchair-output austria.merged.osm.zip"
           fi
           ./merger -d -e -v --drop-shapes \
-            --enrich all --extended-route-types \
+            --enrich "$ENRICH" --extended-route-types \
             --enrich-report enrich-report.json \
             --manifest versions.json \
             --output austria.merged.zip \
-            $OSM_FLAG $FORCE_FLAG
+            $OSM_ARGS $FORCE_FLAG
 
       # Check whether the manifest changed (= at least one feed was updated).
       - name: Check for changes
@@ -149,32 +153,39 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/PatrickSteil/gtfstidy.git "$RUNNER_TEMP/gtfstidy"
           (cd "$RUNNER_TEMP/gtfstidy" && go build -o "$GITHUB_WORKSPACE/gtfstidy" .)
-          ./gtfstidy \
-            --fix \
-            --drop-non-essential \
-            --drop-errs \
-            --delete-orphans \
-            --keep-ids \
-            --fix-trip-headsigns \
-            --fix-far-away-parents \
-            --drop-too-fast-trips \
-            --drop-single-stop-trips \
-            --minimize-services \
-            -o austria.tidy.zip \
-            austria.merged.zip
-          # --drop-non-essential removes feed_info.txt (the release notes rely
-          # on its feed_version for cheap version checks) and attributions.txt
-          # (required by the OSM licence): put both back. Measured with
-          # scripts/check-tidy-fields.sh: platform_code, wheelchair_boarding,
-          # route_desc, route colors and extended route types survive tidy.
-          mkdir feed-info
-          unzip -p austria.merged.zip feed_info.txt > feed-info/feed_info.txt
-          if unzip -Z1 austria.merged.zip | grep -qx attributions.txt; then
-            unzip -p austria.merged.zip attributions.txt > feed-info/attributions.txt
-          fi
-          zip -j austria.tidy.zip feed-info/*.txt
-          mv austria.tidy.zip austria.merged.zip
-          ls -lh austria.merged.zip
+          tidy_one() {
+            in="$1"
+            out="${in%.zip}.tidy.zip"
+            ./gtfstidy \
+              --fix \
+              --drop-non-essential \
+              --drop-errs \
+              --delete-orphans \
+              --keep-ids \
+              --fix-trip-headsigns \
+              --fix-far-away-parents \
+              --drop-too-fast-trips \
+              --drop-single-stop-trips \
+              --minimize-services \
+              -o "$out" \
+              "$in"
+            # --drop-non-essential removes feed_info.txt (the release notes rely
+            # on its feed_version for cheap version checks) and attributions.txt
+            # (required by the OSM licence): put both back. Measured with
+            # scripts/check-tidy-fields.sh: platform_code, wheelchair_boarding,
+            # route_desc, route colors and extended route types survive tidy.
+            dir="$(mktemp -d)"
+            unzip -p "$in" feed_info.txt > "$dir/feed_info.txt"
+            if unzip -Z1 "$in" | grep -qx attributions.txt; then
+              unzip -p "$in" attributions.txt > "$dir/attributions.txt"
+            fi
+            zip -j "$out" "$dir"/*.txt
+            mv "$out" "$in"
+            ls -lh "$in"
+          }
+          for f in austria.merged.zip austria.merged.osm.zip; do
+            if [ -f "$f" ]; then tidy_one "$f"; fi
+          done
 
       # Always upload as a workflow artifact (available for 7 days, useful for
       # debugging even when no release is cut).
@@ -183,7 +194,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: austria.merged
-          path: austria.merged.zip
+          path: |
+            austria.merged.zip
+            austria.merged.osm.zip
           retention-days: 7
 
       - name: Timestamp
@@ -196,6 +209,19 @@ jobs:
       #
       # The release body includes the UTC timestamp from feed_info.txt so
       # anyone visiting the release page can see when it was last generated.
+      # A stale OSM variant from an earlier run must not stay attached when this
+      # run had no OSM data: remove it, so the asset is always current.
+      - name: Remove stale OSM asset
+        if: steps.changes.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          if [ ! -f austria.merged.osm.zip ]; then
+            echo "::warning::No OSM variant this run; removing the old austria.merged.osm.zip from the release."
+            gh release delete-asset latest austria.merged.osm.zip --yes || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish / update "latest" release
         if: steps.changes.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
@@ -227,16 +253,22 @@ jobs:
             "
             ```
 
-            ### Enrichment and attribution
+            ### Two files, two licences
+            - `austria.merged.zip` (the permalink above) is built from the
+              Mobilitätsverbünde Österreich data only. It contains no
+              OpenStreetMap data.
+            - `austria.merged.osm.zip` is the same feed plus `wheelchair_boarding`
+              in `stops.txt`, derived from OpenStreetMap
+              (© OpenStreetMap contributors, [ODbL](https://www.openstreetmap.org/copyright)).
+              Its `stops.txt` is offered under the ODbL; see the README for details.
+
             `enrich-report.json` lists what the enrichment steps changed.
-            Wheelchair data in this feed is derived from OpenStreetMap:
-            © OpenStreetMap contributors, licensed under the
-            [ODbL](https://www.openstreetmap.org/copyright).
 
             Source manifests: see `versions.json` in this repository for the
             individual feed versions that were merged.
           files: |
             austria.merged.zip
+            austria.merged.osm.zip
             enrich-report.json
           make_latest: true
         env:
