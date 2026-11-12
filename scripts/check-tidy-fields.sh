@@ -31,6 +31,9 @@ def stats(path):
     r = rows("routes.txt")
     out["routes.txt:route_type>=100"] = sum(1 for x in r if x["route_type"].isdigit() and int(x["route_type"]) >= 100)
     out["routes.txt:count"] = len(r)
+    out["stops.txt:location_type=2 (entrances)"] = sum(1 for x in rows("stops.txt") if x["location_type"] == "2")
+    out["pathways.txt:count"] = len(rows("pathways.txt")) if "pathways.txt" in names else 0
+    out["levels.txt"] = "levels.txt" in names
     out["attributions.txt"] = "attributions.txt" in names
     out["feed_info.txt"] = "feed_info.txt" in names
     return out

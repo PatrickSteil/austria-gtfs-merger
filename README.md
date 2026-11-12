@@ -41,8 +41,10 @@ Usage:
       --enrich string    Enrichment steps: steig, routes, wheelchair, all (default "steig,routes")
       --enrich-report string  Where to write the enrichment report (default "enrich-report.json")
       --extended-route-types  Write extended (HVT) route_type values
-      --osm-features string  OSM features file from osm-extract (input of the wheelchair step)
-      --wheelchair-output string  Second output that additionally contains the OSM-derived wheelchair_boarding (ODbL)
+      --osm-features string  OSM features file from osm-extract (input of the OpenStreetMap steps)
+      --osm-routes string    OSM route relations file from osm-extract (input of the osmroutes step)
+      --osm-sidecar-dir string  Directory for the OSM stop attribute sidecar and the QA report (ODbL)
+      --osm-output string    Second output with the OSM-derived data (ODbL); the main output never contains OSM data
   -e, --drop-erroneous   Drop erroneous GTFS entities
   -s, --drop-shapes      Drop shapes.txt data
   -o, --output string    Output path (directory or .zip) for merged GTFS (default "merged.zip")
@@ -83,32 +85,41 @@ After merging, optional steps derive data the source feeds do not provide. Each 
 |---|---|---|---|
 | Platform names | `steig` | the GTFS feeds only | Boarding stops that are only named after their platform (`13A`, `1,2`, `G1`) get the station name; the platform moves to `platform_code`. |
 | Route metadata | `routes` | the GTFS feeds only | The product category from `trip_short_name` (RJX, ICE, REX, S, ...) fills `route_desc` and, for rail, `route_color`/`route_text_color`. With `--extended-route-types`, rail routes get HVT types (101 high speed, 102 long distance, 103 inter-regional, 105 sleeper, 106 regional, 109 S-Bahn), rail replacement buses 714, cable cars 6. |
-| Wheelchair | `wheelchair` | GTFS stops + OpenStreetMap | `wheelchair_boarding` from the OpenStreetMap `wheelchair=*` tag of the nearest matching platform or stop (30 m, 40 m for platform areas, same transport mode; platform number and name break ties). Only a clear `yes`/`no` is written, everything else stays `0` (unknown). A station gets a value only if all its boarding stops agree. |
+| Wheelchair | `wheelchair` | GTFS stops + OpenStreetMap | `wheelchair_boarding` from the OpenStreetMap `wheelchair=*` tag of the nearest matching platform or stop (30 m, 40 m for platform areas, same transport mode; platform number and name break ties; stop positions are ignored). Only a clear `yes`/`no` is written, everything else stays `0` (unknown). A station gets a value only if all its boarding stops agree. |
+| Platform codes | `platformcodes` | GTFS stops + OpenStreetMap | Empty `platform_code` filled from the platform `ref` (rail, tram, subway) or `local_ref` (bus) of the best match within 15 m. An existing code is never replaced; a differing OSM value is reported. |
+| Route relations | `osmroutes` | GTFS routes + OpenStreetMap | `route_color` and `route_long_name` from OSM route relations with the same mode and ref whose stops overlap the GTFS route's stops (at least 60 %). Source colours are kept; colours from our own category palette are replaced. Relations that disagree give no colour. Needs `--osm-routes`. |
+| Entrances | `entrances` | GTFS stations + OpenStreetMap | OSM station entrances where the feed has none at that station: `location_type=2` stops below the nearest station, linked by walkway pathways to its nearest boarding stops (estimated length and time, because GTFS pathways cannot end at a station). |
 
-The wheelchair step is the only one that uses OpenStreetMap. Its result is written to a **separate output** (`--wheelchair-output`), never into the main output, so the main feed stays free of OSM data (see [Data sources](#data-sources-and-how-they-are-combined)). The merger refuses to run the step without that option.
+Two more outputs describe the OSM match, they do not change the feed. With `--osm-sidecar-dir` the merger writes `osm-stop-attributes.csv.gz` (tactile paving, bench, shelter, bicycle parking and elevators within 100 m, per stop) and `osm-qa-report.json` (stops without OSM counterpart, distance to the OSM stop position, OSM stops without GTFS stop, route relation matching, elevators).
 
-The OSM features file is built from a Geofabrik extract:
+`steig` and `routes` only use the GTFS feeds. All other steps use OpenStreetMap, so their result is written to a **separate output** (`--osm-output`), never into the main output, and the main feed stays free of OSM data (see [Data sources](#data-sources-and-how-they-are-combined)). The merger refuses to run an OpenStreetMap step without that option.
+
+The OSM files are built from a Geofabrik extract:
 
 ```bash
 curl -O https://download.geofabrik.de/europe/austria-latest.osm.pbf
-go run ./cmd/osm-extract --pbf austria-latest.osm.pbf --out osm-features.json.gz
+go run ./cmd/osm-extract --pbf austria-latest.osm.pbf \
+    --out osm-features.json.gz --routes-out osm-routes.json.gz
 ./merger --enrich all --extended-route-types \
-         --osm-features osm-features.json.gz \
-         --output austria.merged.zip --wheelchair-output austria.merged.osm.zip ...
+         --osm-features osm-features.json.gz --osm-routes osm-routes.json.gz \
+         --output austria.merged.zip --osm-output austria.merged.osm.zip \
+         --osm-sidecar-dir osm-extras ...
 ```
 
-If the OSM data is missing, the main feed is written as usual, no OSM variant is produced and a warning is logged.
+If the OSM data is missing or from an outdated extraction format, the main feed is written as usual, no OSM variant is produced and a warning is logged. A missing `--osm-routes` file only skips the `osmroutes` step.
 
 ## Latest merged GTFS
 
-A merged GTFS feed is built daily. Both files are assets of the rolling `latest` release:
+A merged GTFS feed is built daily. These files are assets of the rolling `latest` release:
 
 | File | Contains | Licence of the data |
 |---|---|---|
 | [`austria.merged.zip`](https://github.com/PatrickSteil/austria-gtfs-merger/releases/download/latest/austria.merged.zip) (permalink, unchanged) | Merged Mobilitätsverbünde feeds plus our rule-based enrichment. **No OpenStreetMap data.** | Terms of the Mobilitätsverbünde Österreich data licence |
-| [`austria.merged.osm.zip`](https://github.com/PatrickSteil/austria-gtfs-merger/releases/download/latest/austria.merged.osm.zip) | The same feed plus `wheelchair_boarding` in `stops.txt`, derived from OpenStreetMap. | `stops.txt`: ODbL, © OpenStreetMap contributors. All other files: as above. |
+| [`austria.merged.osm.zip`](https://github.com/PatrickSteil/austria-gtfs-merger/releases/download/latest/austria.merged.osm.zip) | The same feed enriched with OpenStreetMap data: `wheelchair_boarding`, platform codes and extra entrances in `stops.txt`, entrance pathways in `pathways.txt`, route colours and names in `routes.txt`. | `stops.txt`, `pathways.txt`, `routes.txt`: ODbL, © OpenStreetMap contributors. All other files: as above. |
+| `osm-stop-attributes.csv.gz` | Per stop: tactile paving, bench, shelter, bicycle parking and elevators nearby (not a GTFS file). | ODbL, © OpenStreetMap contributors |
+| `osm-qa-report.json` | Differences between the feed and OpenStreetMap (stops, stop positions, route relations). | ODbL, © OpenStreetMap contributors |
 
-Both files are built from the same merged feed; the OSM variant only adds the wheelchair data and the attribution files described below. `enrich-report.json` in the same release lists what the enrichment steps changed. If a run has no OpenStreetMap data, `austria.merged.osm.zip` is removed from the release instead of being left outdated.
+Both zip files are built from the same merged feed; the OSM variant only adds the OSM-derived data above and the attribution files described below. `enrich-report.json` lists what the enrichment steps changed. If a run has no OpenStreetMap data, the three OSM assets are removed from the release instead of being left outdated.
 
 [All releases](https://github.com/PatrickSteil/austria-gtfs-merger/releases)
 
@@ -117,19 +128,20 @@ Both files are built from the same merged feed; the OSM variant only adds the wh
 | Data | Source | Used for |
 |---|---|---|
 | GTFS datasets of the Austrian transport associations | [data.mobilitaetsverbuende.at](https://data.mobilitaetsverbuende.at/) (Mobilitätsverbünde Österreich), downloaded with an account of this repository's owner and used under the platform's data licence | Everything in both files: agencies, stops, routes, trips, times, calendars, transfers, pathways |
-| OpenStreetMap | [Geofabrik](https://download.geofabrik.de/europe/austria.html) extract of Austria, © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/1-0/) | Only the `wheelchair=*` tag, only for `wheelchair_boarding`, only in `austria.merged.osm.zip` |
+| OpenStreetMap | [Geofabrik](https://download.geofabrik.de/europe/austria.html) extract of Austria, © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/1-0/) | Tags `wheelchair`, `ref`/`local_ref`, `tactile_paving`, `bench`, `shelter`, route relations (`colour`, `from`, `to`), entrances, elevators, bicycle parking, stop positions. Only in `austria.merged.osm.zip`, the sidecar and the QA report. |
 | Our own rules | This repository (GPL-2.0) | Product categories, route types, colors, platform names; no external data |
 
 How they meet:
 
 1. **Merge.** The feeds of all associations are merged into one dataset. IDs are consistent across the feeds, so entities are joined directly; duplicates are handled by `gtfsparser`.
 2. **Rule-based enrichment.** Platform names and route metadata are derived from the merged feed itself. No OpenStreetMap data is involved. The result is `austria.merged.zip`.
-3. **OpenStreetMap match.** A reduced copy of the OSM data (public transport platforms and stops with their `wheelchair` tag) is matched to each boarding stop by distance and transport mode. The matched values are added to `stops.txt`, which gives `austria.merged.osm.zip`. This happens on a copy, after `austria.merged.zip` has been written.
+3. **OpenStreetMap match.** A reduced copy of the OSM data (public transport stops and platforms, entrances, elevators, bicycle parking and route relations) is matched to each boarding stop and route by distance, transport mode and, for routes, ref and shared stops. The matched values are added to `stops.txt`, `routes.txt` and `pathways.txt`, which gives `austria.merged.osm.zip`; the sidecar and the QA report are written next to it. This happens after `austria.merged.zip` has been written, so the main feed never sees it.
 
 What this means for the licences:
 
 - **`austria.merged.zip`** contains no OSM data. It is covered by the terms of the Mobilitätsverbünde data licence only.
-- **`austria.merged.osm.zip`**: its `stops.txt` combines the association data with values taken from OpenStreetMap. We treat it as a *Derivative Database* in the sense of the ODbL and offer it under the [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). The other files in that zip (agencies, routes, trips, ...) contain no OSM data and keep the licence of the source data. They are the same files as in `austria.merged.zip`.
+- **`austria.merged.osm.zip`**: its `stops.txt`, `routes.txt` and `pathways.txt` combine the association data with values taken from OpenStreetMap. We treat them as a *Derivative Database* in the sense of the ODbL and offer them under the [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). The other files in that zip (agencies, trips, stop times, calendars, transfers, ...) contain no OSM data and keep the licence of the source data. They are the same files as in `austria.merged.zip`.
+- **Sidecar and QA report** are derived from OpenStreetMap and offered under the ODbL as well.
 - **Attribution** for OpenStreetMap is part of the file itself: `feed_publisher_name` in `feed_info.txt` and `attributions.txt`. Data from the Mobilitätsverbünde Österreich remains attributed to its publisher (see the platform linked above for the required wording).
 - This is our reading of the licences and the OSM Foundation's [Community Guidelines](https://osmfoundation.org/wiki/Licence/Community_Guidelines), not legal advice. If you build on these files, check the terms yourself.
 

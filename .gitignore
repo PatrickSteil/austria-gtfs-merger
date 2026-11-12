@@ -6,3 +6,5 @@ austria.merged.zip
 osm-features.json.gz
 enrich-report.json
 *.osm.pbf
+osm-routes.json.gz
+osm-extras/

@@ -49,9 +49,11 @@ jobs:
         id: osmcache
         uses: actions/cache/restore@v4
         with:
-          path: osm-features.json.gz
-          key: osm-features-${{ steps.osm.outputs.week }}
-          restore-keys: osm-features-
+          path: |
+            osm-features.json.gz
+            osm-routes.json.gz
+          key: osm-features-v2-${{ steps.osm.outputs.week }}
+          restore-keys: osm-features-v2-
 
       - name: Extract OSM features
         id: osmextract
@@ -60,8 +62,10 @@ jobs:
         timeout-minutes: 20
         run: |
           curl -sSL --fail --max-time 1000 -o austria-latest.osm.pbf https://download.geofabrik.de/europe/austria-latest.osm.pbf
-          CGO_ENABLED=0 go run ./cmd/osm-extract --pbf austria-latest.osm.pbf --out osm-features.new.gz
+          CGO_ENABLED=0 go run ./cmd/osm-extract --pbf austria-latest.osm.pbf \
+            --out osm-features.new.gz --routes-out osm-routes.new.gz
           mv osm-features.new.gz osm-features.json.gz
+          mv osm-routes.new.gz osm-routes.json.gz
           rm -f austria-latest.osm.pbf
 
       # Only a freshly extracted file is saved, so a stale file restored via
@@ -70,8 +74,10 @@ jobs:
         if: steps.osmextract.outcome == 'success'
         uses: actions/cache/save@v4
         with:
-          path: osm-features.json.gz
-          key: osm-features-${{ steps.osm.outputs.week }}
+          path: |
+            osm-features.json.gz
+            osm-routes.json.gz
+          key: osm-features-v2-${{ steps.osm.outputs.week }}
 
       - name: Check OSM features age
         continue-on-error: true
@@ -83,7 +89,7 @@ jobs:
           fi
           KEY="${{ steps.osmcache.outputs.cache-matched-key }}"
           if [ -n "$KEY" ] && [ "${{ steps.osmextract.outcome }}" != "success" ]; then
-            AGE=$(( ( $(date -u +%s) - $(date -u -d "${KEY#osm-features-}" +%s) ) / 86400 ))
+            AGE=$(( ( $(date -u +%s) - $(date -u -d "${KEY#osm-features-v2-}" +%s) ) / 86400 ))
             if [ "$AGE" -gt 60 ]; then
               echo "::warning::OSM features cache is $AGE days old."
             fi
@@ -102,13 +108,17 @@ jobs:
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             FORCE_FLAG="--force"
           fi
-          # austria.merged.zip never contains OpenStreetMap data. The OSM-derived
-          # wheelchair_boarding values (ODbL) go into austria.merged.osm.zip.
+          # austria.merged.zip never contains OpenStreetMap data. Everything
+          # derived from OSM (ODbL) goes into austria.merged.osm.zip and into
+          # osm-extras/ (stop attribute sidecar and QA report).
           ENRICH="steig,routes"
           OSM_ARGS=""
           if [ -s osm-features.json.gz ]; then
             ENRICH="all"
-            OSM_ARGS="--osm-features osm-features.json.gz --wheelchair-output austria.merged.osm.zip"
+            OSM_ARGS="--osm-features osm-features.json.gz --osm-output austria.merged.osm.zip --osm-sidecar-dir osm-extras"
+            if [ -s osm-routes.json.gz ]; then
+              OSM_ARGS="$OSM_ARGS --osm-routes osm-routes.json.gz"
+            fi
           fi
           ./merger -d -e -v --drop-shapes \
             --enrich "$ENRICH" --extended-route-types \
@@ -197,6 +207,7 @@ jobs:
           path: |
             austria.merged.zip
             austria.merged.osm.zip
+            osm-extras/
           retention-days: 7
 
       - name: Timestamp
@@ -216,8 +227,10 @@ jobs:
         continue-on-error: true
         run: |
           if [ ! -f austria.merged.osm.zip ]; then
-            echo "::warning::No OSM variant this run; removing the old austria.merged.osm.zip from the release."
-            gh release delete-asset latest austria.merged.osm.zip --yes || true
+            echo "::warning::No OSM variant this run; removing the old OSM assets from the release."
+            for a in austria.merged.osm.zip osm-stop-attributes.csv.gz osm-qa-report.json; do
+              gh release delete-asset latest "$a" --yes || true
+            done
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -257,10 +270,17 @@ jobs:
             - `austria.merged.zip` (the permalink above) is built from the
               Mobilitätsverbünde Österreich data only. It contains no
               OpenStreetMap data.
-            - `austria.merged.osm.zip` is the same feed plus `wheelchair_boarding`
-              in `stops.txt`, derived from OpenStreetMap
-              (© OpenStreetMap contributors, [ODbL](https://www.openstreetmap.org/copyright)).
-              Its `stops.txt` is offered under the ODbL; see the README for details.
+            - `austria.merged.osm.zip` is the same feed enriched with
+              OpenStreetMap data (© OpenStreetMap contributors,
+              [ODbL](https://www.openstreetmap.org/copyright)): `wheelchair_boarding`
+              and platform codes in `stops.txt`, extra station entrances in
+              `stops.txt` and `pathways.txt`, route colours and names in
+              `routes.txt`. These three files are offered under the ODbL; see the
+              README for details.
+            - `osm-stop-attributes.csv.gz` (tactile paving, bench, shelter, nearby
+              bicycle parking and elevators per stop) and `osm-qa-report.json`
+              (differences between the feed and OpenStreetMap) are OSM-derived
+              as well (ODbL).
 
             `enrich-report.json` lists what the enrichment steps changed.
 
@@ -269,6 +289,8 @@ jobs:
           files: |
             austria.merged.zip
             austria.merged.osm.zip
+            osm-extras/osm-stop-attributes.csv.gz
+            osm-extras/osm-qa-report.json
             enrich-report.json
           make_latest: true
         env:
