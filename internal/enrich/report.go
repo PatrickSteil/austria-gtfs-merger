@@ -24,6 +24,9 @@ type Report struct {
 	Counts    map[string]int `json:"counts,omitempty"`
 	// Skipped is non-empty when the step did not run; it holds the reason.
 	Skipped string `json:"skipped,omitempty"`
+	// PaletteRoutes lists the routes whose colors were assigned by the routes
+	// step itself (not serialized). Later steps may replace those colors.
+	PaletteRoutes map[string]bool `json:"-"`
 }
 
 // Example records an illustrative change (at most 20 are kept).

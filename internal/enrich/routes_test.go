@@ -191,3 +191,18 @@ func TestRoutesColorsParserDefaults(t *testing.T) {
 		t.Errorf("default colors were not replaced: %q/%q", r.Color, r.Text_color)
 	}
 }
+
+func TestRoutesRecordsPaletteRoutes(t *testing.T) {
+	feed := gtfsparser.NewFeed()
+	own := addRoute(feed, "own", "S1", 2)
+	addTrip(feed, own, sp("S 100"))
+	src := addRoute(feed, "src", "S2", 2)
+	src.Color, src.Text_color = "FF0000", "FFFFFF"
+	addTrip(feed, src, sp("S 101"))
+
+	rep := Routes(feed, RouteOptions{})
+
+	if !rep.PaletteRoutes["own"] || rep.PaletteRoutes["src"] {
+		t.Errorf("PaletteRoutes = %v, want only own", rep.PaletteRoutes)
+	}
+}

@@ -93,6 +93,10 @@ func Routes(feed *gtfsparser.Feed, opts RouteOptions) Report {
 			if colorUnset(r) {
 				if col, ok := ColorFor(winner); ok {
 					r.Color, r.Text_color = col, TextColorFor(col)
+					if rep.PaletteRoutes == nil {
+						rep.PaletteRoutes = make(map[string]bool)
+					}
+					rep.PaletteRoutes[r.Id] = true
 					rep.Count("colored", 1)
 					changed = true
 				}
