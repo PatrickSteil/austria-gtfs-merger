@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/PatrickSteil/austria-gtfs-merger/internal/download"
+	"github.com/PatrickSteil/austria-gtfs-merger/internal/enrich"
 	"github.com/joho/godotenv"
 	"github.com/patrickbr/gtfsparser"
 	gtfs "github.com/patrickbr/gtfsparser/gtfs"
@@ -51,9 +52,19 @@ func main() {
 	flag.IntVar(&lim.MaxDropPct, "max-drop", 20, "Sanity check: maximum decrease in percent vs. the previous run (0 disables)")
 	allowParseErrFlag := flag.Bool("allow-parse-errors", false, "Continue merging if some feeds fail to parse (default: abort)")
 
+	enrichFlag := flag.String("enrich", "steig,routes", "Enrichment steps: steig, routes, wheelchair, all (comma separated, empty disables)")
+	extTypesFlag := flag.Bool("extended-route-types", false, "Write extended (HVT) route_type values for rail, replacement bus and cable cars")
+	osmFeaturesFlag := flag.String("osm-features", "", "OSM accessibility features file produced by osm-extract (enables the wheelchair step)")
+	enrichReportFlag := flag.String("enrich-report", "enrich-report.json", "Where to write the enrichment report (empty disables)")
+
 	flag.Parse()
 
 	log.SetFlags(0)
+
+	steps, err := enrich.ParseSteps(*enrichFlag)
+	if err != nil {
+		log.Fatalf("error   %v", err)
+	}
 
 	username, password := credentials()
 
@@ -210,6 +221,17 @@ func main() {
 	syntheticCount := enforceParentStations(feed)
 	if syntheticCount > 0 {
 		log.Printf("info    created %d synthetic parent station(s)", syntheticCount)
+	}
+
+	var reports []enrich.Report
+	_ = extTypesFlag
+	_ = osmFeaturesFlag
+	_ = steps
+	for _, r := range reports {
+		log.Printf("enrich  %s changed=%d", r.Step, r.Changed)
+	}
+	if err := enrich.WriteReports(*enrichReportFlag, reports); err != nil {
+		log.Printf("warn    could not write enrichment report: %v", err)
 	}
 
 	cleaned := cleanHeadsigns(feed)
