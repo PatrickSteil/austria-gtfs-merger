@@ -156,3 +156,39 @@ func TestWheelchairParents(t *testing.T) {
 		}
 	}
 }
+
+// A stop_position node (usually without wheelchair tag) must not hide the tag
+// of the platform next to it.
+func TestStopPositionDoesNotHideWheelchair(t *testing.T) {
+	feed := gtfsparser.NewFeed()
+	s := wcStop(feed, "s", "Hbf", 3, 0)
+	stopPos := feat(3, "bus", "", "", "")
+	stopPos.StopPos = true
+	Wheelchair(feed, []osmfeat.Feature{stopPos, feat(12, "bus", "yes", "Hbf", "")}, DefaultWheelchairOptions())
+	if s.Wheelchair_boarding != 1 {
+		t.Errorf("wheelchair_boarding = %d, want 1", s.Wheelchair_boarding)
+	}
+}
+
+func TestMatchExposesBest(t *testing.T) {
+	feed := gtfsparser.NewFeed()
+	wcStop(feed, "a", "Hbf", 3, 0)
+	wcStop(feed, "b", "Hbf", 3, 1000)
+	feats := []osmfeat.Feature{
+		feat(5, "bus", "yes", "Hbf", ""),
+		feat(1000+10, "bus", "yes", "Hbf", ""),
+		feat(1000-10, "bus", "no", "Hbf", ""),
+		feat(5000, "bus", "yes", "far", ""),
+		{ID: 1, Lat: baseLat, Lon: baseLon, Kind: "elevator", Wheelchair: "yes"},
+	}
+	ms := Match(feed, feats, DefaultWheelchairOptions())
+	if len(ms) != 2 || ms[0].Stop.Id != "a" || ms[1].Stop.Id != "b" {
+		t.Fatalf("matches = %+v", ms)
+	}
+	if !ms[0].HasBest || ms[0].Best.f.Wheelchair != "yes" || ms[0].WheelchairConflict() {
+		t.Errorf("a: %+v", ms[0])
+	}
+	if !ms[1].HasBest || !ms[1].WheelchairConflict() || len(ms[1].Tied) != 1 {
+		t.Errorf("b should have one tied candidate and a conflict: %+v", ms[1])
+	}
+}
