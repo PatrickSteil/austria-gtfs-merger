@@ -20,7 +20,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/patrickbr/gtfsparser"
 	gtfs "github.com/patrickbr/gtfsparser/gtfs"
-	"github.com/patrickbr/gtfswriter"
 	flag "github.com/spf13/pflag"
 )
 
@@ -56,6 +55,7 @@ func main() {
 	enrichFlag := flag.String("enrich", "steig,routes", "Enrichment steps: steig, routes, wheelchair, all (comma separated, empty disables)")
 	extTypesFlag := flag.Bool("extended-route-types", false, "Write extended (HVT) route_type values for rail, replacement bus and cable cars")
 	osmFeaturesFlag := flag.String("osm-features", "", "OSM accessibility features file produced by osm-extract (enables the wheelchair step)")
+	wheelchairOutFlag := flag.String("wheelchair-output", "", "Second output (.zip or directory) that additionally contains the OSM-derived wheelchair_boarding values (ODbL); the main output never does")
 	enrichReportFlag := flag.String("enrich-report", "enrich-report.json", "Where to write the enrichment report (empty disables)")
 
 	flag.Parse()
@@ -64,6 +64,9 @@ func main() {
 
 	steps, err := enrich.ParseSteps(*enrichFlag)
 	if err != nil {
+		log.Fatalf("error   %v", err)
+	}
+	if err := validateEnrichFlags(steps, *wheelchairOutFlag); err != nil {
 		log.Fatalf("error   %v", err)
 	}
 
@@ -225,22 +228,15 @@ func main() {
 	}
 
 	var reports []enrich.Report
-	osmUsed := false
 	if steps.Platforms {
 		reports = append(reports, enrich.Platforms(feed))
 	}
 	if steps.Routes {
 		reports = append(reports, enrich.Routes(feed, enrich.RouteOptions{ExtendedTypes: *extTypesFlag}))
 	}
-	if steps.Wheelchair {
-		rep := runWheelchair(feed, *osmFeaturesFlag)
-		reports = append(reports, rep)
-		osmUsed = rep.Skipped == ""
-	}
 	for _, r := range reports {
 		log.Printf("enrich  %s changed=%d", r.Step, r.Changed)
 	}
-	log.Printf("info    OSM data used: %v", osmUsed)
 	if err := enrich.WriteReports(*enrichReportFlag, reports); err != nil {
 		log.Printf("warn    could not write enrichment report: %v", err)
 	}
@@ -275,18 +271,7 @@ func main() {
 	log.Printf("stats   agencies=%d stops=%d routes=%d (rail=%d) trips=%d",
 		cur.Agencies, cur.Stops, cur.Routes, cur.RailRoutes, cur.Trips)
 	log.Printf("stats   route types: %s", strings.Join(routeTypeCounts(feed), " "))
-	log.Printf("stats   extended route types=%d stops with wheelchair_boarding=%d", cur.ExtendedRouteTypes, cur.WheelchairKnown)
-	wheelchairSkipped := steps.Wheelchair && !osmUsed
-	for _, w := range warnings(cur, prev, wheelchairSkipped) {
-		log.Printf("warn    %s", w)
-		if os.Getenv("GITHUB_ACTIONS") == "true" {
-			fmt.Printf("::warning::%s\n", w)
-		}
-	}
-	if wheelchairSkipped && prev != nil {
-		// Keep the last real baseline so the next run can still notice a gap.
-		cur.WheelchairKnown = prev.WheelchairKnown
-	}
+	log.Printf("stats   extended route types=%d", cur.ExtendedRouteTypes)
 	if len(problems) > 0 {
 		for _, p := range problems {
 			log.Printf("check   FAILED %s", p)
@@ -304,32 +289,42 @@ func main() {
 	if *verboseFlag {
 		log.Printf("write   GTFS to %s", *outputFlag)
 	}
+	if err := writeFeed(feed, *outputFlag, false); err != nil {
+		log.Fatalf("error   %v", err)
+	}
 
-	isZip := strings.HasSuffix(strings.ToLower(*outputFlag), ".zip")
-	if isZip {
-		// gtfswriter stats the target path before writing, so it must exist.
-		f, err := os.Create(*outputFlag)
-		if err != nil {
-			log.Fatalf("error   creating output file: %v", err)
+	// ---- OSM-derived variant ----
+	//
+	// wheelchair_boarding comes from OpenStreetMap (ODbL). It goes into a
+	// second output only, after the main feed has been written, so the main
+	// feed never contains OSM-derived data.
+	if steps.Wheelchair {
+		rep := runWheelchair(feed, *osmFeaturesFlag)
+		reports = append(reports, rep)
+		log.Printf("enrich  %s changed=%d", rep.Step, rep.Changed)
+		osmUsed := rep.Skipped == ""
+		if osmUsed {
+			if err := writeFeed(feed, *wheelchairOutFlag, true); err != nil {
+				log.Fatalf("error   %v", err)
+			}
+			cur.WheelchairKnown = enrich.WheelchairKnown(feed)
+		} else if err := os.RemoveAll(*wheelchairOutFlag); err != nil {
+			log.Printf("warn    could not remove stale %s: %v", *wheelchairOutFlag, err)
 		}
-		f.Close()
-	} else if err := os.MkdirAll(*outputFlag, os.ModePerm); err != nil {
-		log.Fatalf("error   creating output directory: %v", err)
-	}
-
-	writer := gtfswriter.Writer{Sorted: true}
-	if err := writer.Write(feed, *outputFlag); err != nil {
-		log.Fatalf("error   writing GTFS: %v", err)
-	}
-
-	log.Printf("done    GTFS written to %s", *outputFlag)
-
-	startDate, endDate := activeRange(feed)
-	log.Printf("info    service dates %s - %s", startDate, endDate)
-	if err := injectFeedInfo(*outputFlag, isZip, startDate, endDate, osmUsed); err != nil {
-		log.Printf("warn    could not inject feed_info.txt: %v", err)
-	} else {
-		log.Printf("done    injected feed_info.txt into %s", *outputFlag)
+		log.Printf("stats   stops with wheelchair_boarding=%d", cur.WheelchairKnown)
+		for _, w := range warnings(cur, prev, !osmUsed) {
+			log.Printf("warn    %s", w)
+			if os.Getenv("GITHUB_ACTIONS") == "true" {
+				fmt.Printf("::warning::%s\n", w)
+			}
+		}
+		if !osmUsed && prev != nil {
+			// Keep the last real baseline so the next run can still notice a gap.
+			cur.WheelchairKnown = prev.WheelchairKnown
+		}
+		if err := enrich.WriteReports(*enrichReportFlag, reports); err != nil {
+			log.Printf("warn    could not write enrichment report: %v", err)
+		}
 	}
 
 	// Only a feed that passed the checks becomes the new baseline.
