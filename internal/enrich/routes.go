@@ -3,6 +3,7 @@ package enrich
 import (
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/patrickbr/gtfsparser"
 	gtfs "github.com/patrickbr/gtfsparser/gtfs"
@@ -89,7 +90,7 @@ func Routes(feed *gtfsparser.Feed, opts RouteOptions) Report {
 				rep.Count("described", 1)
 				changed = true
 			}
-			if r.Color == "" && r.Text_color == "" {
+			if colorUnset(r) {
 				if col, ok := ColorFor(winner); ok {
 					r.Color, r.Text_color = col, TextColorFor(col)
 					rep.Count("colored", 1)
@@ -127,4 +128,13 @@ func dominantCategory(counts map[Category]int, base int16) Category {
 		}
 	}
 	return best
+}
+
+// colorUnset reports whether a route has no colors of its own. The GTFS
+// parser fills missing colors with white background and black text, which the
+// writer omits again, so those defaults count as unset too.
+func colorUnset(r *gtfs.Route) bool {
+	bgUnset := r.Color == "" || strings.EqualFold(r.Color, "FFFFFF")
+	fgUnset := r.Text_color == "" || strings.EqualFold(r.Text_color, "000000")
+	return bgUnset && fgUnset
 }

@@ -176,3 +176,18 @@ func TestRoutesWithoutExtendedTypes(t *testing.T) {
 		t.Errorf("route_desc should still be filled, got %q", a.Desc)
 	}
 }
+
+// The GTFS parser fills missing colors with white/black defaults, which the
+// writer omits again. Those count as "not set".
+func TestRoutesColorsParserDefaults(t *testing.T) {
+	feed := gtfsparser.NewFeed()
+	r := addRoute(feed, "H", "H1", 2)
+	r.Color, r.Text_color = "FFFFFF", "000000"
+	addTrip(feed, r, sp("S 100"))
+
+	Routes(feed, RouteOptions{})
+
+	if want, _ := ColorFor("S"); r.Color != want {
+		t.Errorf("default colors were not replaced: %q/%q", r.Color, r.Text_color)
+	}
+}
