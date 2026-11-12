@@ -224,10 +224,12 @@ func main() {
 	}
 
 	var reports []enrich.Report
-	_ = extTypesFlag
 	_ = osmFeaturesFlag
 	if steps.Platforms {
 		reports = append(reports, enrich.Platforms(feed))
+	}
+	if steps.Routes {
+		reports = append(reports, enrich.Routes(feed, enrich.RouteOptions{ExtendedTypes: *extTypesFlag}))
 	}
 	for _, r := range reports {
 		log.Printf("enrich  %s changed=%d", r.Step, r.Changed)
