@@ -14,9 +14,6 @@ const (
 	// entranceRadiusM is how close an OSM entrance must be to a station, and
 	// how far from an existing feed entrance it must be to count as new.
 	entranceRadiusM = 80.0
-	// maxEntrancePathways is the number of nearest boarding stops an entrance
-	// is linked to.
-	maxEntrancePathways = 4
 	// walkOverheadS and walkSpeedMS give the estimated traversal time.
 	walkOverheadS = 30
 	walkSpeedMS   = 1.0
@@ -24,7 +21,8 @@ const (
 
 // Entrances adds OSM station entrances that the feed does not have, as
 // location_type=2 stops below the nearest suitable station, each linked by
-// walkway pathways to the nearest boarding stops of the station.
+// walkway pathways to every boarding stop of the station (so no platform of a
+// station with pathways is left unreachable).
 //
 // A station is suitable if it has boarding stops served by rail, subway or
 // tram and no entrance (location_type 2 child) yet. An OSM entrance is
@@ -128,9 +126,6 @@ func Entrances(feed *gtfsparser.Feed, feats []osmfeat.Feature) Report {
 			}
 			return bs[i].Id < bs[j].Id
 		})
-		if len(bs) > maxEntrancePathways {
-			bs = bs[:maxEntrancePathways]
-		}
 		for _, b := range bs {
 			d := distM(f.Lat, f.Lon, float64(b.Lat), float64(b.Lon))
 			pid := fmt.Sprintf("osm:pw:%d:%s", f.ID, b.Id)

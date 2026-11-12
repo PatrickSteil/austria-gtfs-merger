@@ -45,8 +45,6 @@ func ClassifyTags(tags map[string]string) (string, bool) {
 		return "aerialway", true
 	case tags["railway"] == "tram_stop":
 		return "tram", true
-	case tags["railway"] == "subway_entrance":
-		return "subway", true
 	case tags["railway"] == "platform", tags["railway"] == "halt", tags["railway"] == "station":
 		switch {
 		case tags["tram"] == "yes":
@@ -72,6 +70,41 @@ func ClassifyTags(tags map[string]string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func isPlatformObject(tags map[string]string) bool {
+	return tags["railway"] == "platform" || tags["public_transport"] == "platform" ||
+		tags["highway"] == "bus_stop" || tags["railway"] == "tram_stop"
+}
+
+// FeatureFromTags builds a Feature from an OSM object's tags, or reports false
+// if the object is not relevant. Entrances and other extra objects are
+// recognised first, so a subway entrance is never a subway stop. A platform
+// designation is only taken from platforms and stops: the ref of a station or
+// halt is usually a station code, not a platform.
+func FeatureFromTags(id int64, tags map[string]string, lat, lon float64, area bool) (Feature, bool) {
+	f := Feature{ID: id, Lat: lat, Lon: lon, Area: area}
+	if kind, ok := ClassifyExtra(tags); ok {
+		f.Kind = kind
+	} else if kind, ok := ClassifyTags(tags); ok {
+		f.Kind = kind
+		f.StopPos = tags["public_transport"] == "stop_position"
+		if isPlatformObject(tags) {
+			f.Platform = PlatformRef(kind, tags)
+		}
+		f.Tactile = NormalizeTri(tags["tactile_paving"])
+		f.Bench = NormalizeTri(tags["bench"])
+		f.Shelter = NormalizeTri(tags["shelter"])
+	} else {
+		return Feature{}, false
+	}
+	f.Ref = tags["local_ref"]
+	if f.Ref == "" {
+		f.Ref = tags["ref"]
+	}
+	f.Wheelchair = NormalizeWheelchair(tags["wheelchair"])
+	f.Name = tags["name"]
+	return f, true
 }
 
 // NormalizeWheelchair maps an OSM wheelchair=* value to yes, no, limited or "".

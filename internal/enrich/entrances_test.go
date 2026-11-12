@@ -92,8 +92,8 @@ func TestEntrances(t *testing.T) {
 			nb++
 		}
 	}
-	if nb != 4 {
-		t.Errorf("B pathways = %d, want 4 (the nearest of 6)", nb)
+	if nb != 6 {
+		t.Errorf("B pathways = %d, want 6 (every boarding stop must stay reachable)", nb)
 	}
 
 	for _, id := range []string{"502", "503", "504", "505", "506", "508"} {
@@ -105,8 +105,8 @@ func TestEntrances(t *testing.T) {
 	if i1 == nil || i1.Parent_station.Id != "I1" {
 		t.Errorf("entrance 507 = %+v, want parent I1", i1)
 	}
-	if rep.Step != "entrances" || rep.Changed != 3 || rep.Counts["pathways"] != 2+4+1 {
-		t.Errorf("report = %+v, want 3 entrances and 7 pathways", rep)
+	if rep.Step != "entrances" || rep.Changed != 3 || rep.Counts["pathways"] != 2+6+1 {
+		t.Errorf("report = %+v, want 3 entrances and 9 pathways", rep)
 	}
 
 	// A second run must not add anything.

@@ -166,23 +166,34 @@ func routeStops(feed *gtfsparser.Feed, tripIDs []string) []routePoint {
 }
 
 // overlapOK reports whether enough of the smaller stop set has a counterpart
-// in the other within routeStopRadiusM.
+// in the other within routeStopRadiusM. The matches are counted from the
+// smaller set's side, so several dense stops next to one stop of the other set
+// cannot push the share above what that set really covers.
 func overlapOK(gtfsStops []routePoint, relStops []osmfeat.Point) bool {
 	if len(gtfsStops) < minSharedStops || len(relStops) < minSharedStops {
 		return false
 	}
-	shared := 0
-	for _, g := range gtfsStops {
-		for _, p := range relStops {
-			if distM(g.lat, g.lon, p.Lat, p.Lon) <= routeStopRadiusM {
-				shared++
-				break
+	shared, smaller := 0, 0
+	if len(gtfsStops) <= len(relStops) {
+		smaller = len(gtfsStops)
+		for _, g := range gtfsStops {
+			for _, p := range relStops {
+				if distM(g.lat, g.lon, p.Lat, p.Lon) <= routeStopRadiusM {
+					shared++
+					break
+				}
 			}
 		}
-	}
-	smaller := len(gtfsStops)
-	if len(relStops) < smaller {
+	} else {
 		smaller = len(relStops)
+		for _, p := range relStops {
+			for _, g := range gtfsStops {
+				if distM(g.lat, g.lon, p.Lat, p.Lon) <= routeStopRadiusM {
+					shared++
+					break
+				}
+			}
+		}
 	}
 	return shared >= minSharedStops && float64(shared)/float64(smaller) >= minRouteOverlap
 }

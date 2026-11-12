@@ -83,7 +83,7 @@ jobs:
         continue-on-error: true
         run: |
           if [ ! -s osm-features.json.gz ]; then
-            echo "::warning::No OSM features available; wheelchair_boarding will be missing from this feed."
+            echo "::warning::No OSM features available; the OSM variant and its extras will be missing from this run."
           elif [ "${{ steps.osmextract.outcome }}" = "failure" ]; then
             echo "::warning::OSM extraction failed; using cached features from ${{ steps.osmcache.outputs.cache-matched-key }}."
           fi
@@ -274,9 +274,9 @@ jobs:
               OpenStreetMap data (© OpenStreetMap contributors,
               [ODbL](https://www.openstreetmap.org/copyright)): `wheelchair_boarding`
               and platform codes in `stops.txt`, extra station entrances in
-              `stops.txt` and `pathways.txt`, route colours and names in
-              `routes.txt`. These three files are offered under the ODbL; see the
-              README for details.
+              `stops.txt` (and `pathways.txt` while the tidy step keeps it), route
+              colours and names in `routes.txt`. These files are offered under the
+              ODbL; see the README for details.
             - `osm-stop-attributes.csv.gz` (tactile paving, bench, shelter, nearby
               bicycle parking and elevators per stop) and `osm-qa-report.json`
               (differences between the feed and OpenStreetMap) are OSM-derived

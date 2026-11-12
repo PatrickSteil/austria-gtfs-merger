@@ -21,7 +21,7 @@ func TestClassifyTags(t *testing.T) {
 		{map[string]string{"railway": "platform", "subway": "yes"}, "subway", true},
 		{map[string]string{"railway": "tram_stop"}, "tram", true},
 		{map[string]string{"railway": "halt"}, "rail", true},
-		{map[string]string{"railway": "subway_entrance"}, "subway", true},
+		{map[string]string{"railway": "subway_entrance"}, "", false}, // an entrance, see ClassifyExtra
 		{map[string]string{"amenity": "ferry_terminal"}, "ferry", true},
 		{map[string]string{"amenity": "bus_station"}, "bus", true},
 		{map[string]string{"aerialway": "station"}, "aerialway", true},
@@ -148,5 +148,44 @@ func TestFeaturesVersioned(t *testing.T) {
 	f.Close()
 	if _, err := Read(old); !errors.Is(err, ErrFormat) {
 		t.Errorf("old format: err = %v, want ErrFormat", err)
+	}
+}
+
+func TestFeatureFromTags(t *testing.T) {
+	cases := []struct {
+		name string
+		tags map[string]string
+		want Feature
+		ok   bool
+	}{
+		{"subway entrance is an entrance, not a subway stop",
+			map[string]string{"railway": "subway_entrance", "wheelchair": "yes"},
+			Feature{ID: 9, Kind: "entrance", Wheelchair: "yes"}, true},
+		{"entrance tag wins over public_transport=station",
+			map[string]string{"entrance": "yes", "public_transport": "station", "subway": "yes"},
+			Feature{ID: 9, Kind: "entrance"}, true},
+		{"platform keeps its ref as platform",
+			map[string]string{"railway": "platform", "ref": "3", "wheelchair": "no", "name": "X", "tactile_paving": "yes"},
+			Feature{ID: 9, Kind: "rail", Wheelchair: "no", Name: "X", Ref: "3", Platform: "3", Tactile: "yes"}, true},
+		{"station ref is not a platform",
+			map[string]string{"railway": "station", "ref": "WB"},
+			Feature{ID: 9, Kind: "rail", Ref: "WB"}, true},
+		{"halt ref is not a platform",
+			map[string]string{"railway": "halt", "ref": "AB"},
+			Feature{ID: 9, Kind: "rail", Ref: "AB"}, true},
+		{"stop position",
+			map[string]string{"public_transport": "stop_position", "bus": "yes"},
+			Feature{ID: 9, Kind: "bus", StopPos: true}, true},
+		{"bus stop uses local_ref only",
+			map[string]string{"highway": "bus_stop", "local_ref": "B", "ref": "1234"},
+			Feature{ID: 9, Kind: "bus", Ref: "B", Platform: "B"}, true},
+		{"bicycle parking", map[string]string{"amenity": "bicycle_parking"}, Feature{ID: 9, Kind: "bicycle_parking"}, true},
+		{"irrelevant", map[string]string{"shop": "bakery"}, Feature{}, false},
+	}
+	for _, c := range cases {
+		got, ok := FeatureFromTags(9, c.tags, 0, 0, false)
+		if ok != c.ok || (ok && !reflect.DeepEqual(got, c.want)) {
+			t.Errorf("%s: got %+v,%v want %+v,%v", c.name, got, ok, c.want, c.ok)
+		}
 	}
 }

@@ -103,7 +103,8 @@ die Absicherung des Refactorings.
   `wheelchair_boarding` aus dem Tag.
 - Pathways: Ein Pathway darf in GTFS nicht an einer Station (`location_type=1`)
   enden. Deshalb Walkway (`pathway_mode=1`, bidirektional) vom Eingang zu den
-  bis zu vier nächsten Boarding-Stops der Station, `length` = Luftlinie,
+  Boarding-Stops der Station (nach dem Review: alle, damit kein Bahnsteig
+  unerreichbar bleibt), `length` = Luftlinie,
   `traversal_time` = 30 s + Luftlinie bei 1 m/s. Das ist eine Schätzung und
   steht so im Report. (Abweichung von der Zusage "ein Walkway zur Station".)
 - Erwartete Wirkung ist klein: das Feed enthält schon 1 747 Eingänge an

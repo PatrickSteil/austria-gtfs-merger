@@ -124,3 +124,24 @@ func contains(xs []string, s string) bool {
 	}
 	return false
 }
+
+// The overlap is measured from the smaller stop set: several dense GTFS stops
+// next to the same two relation members must not count as a good match.
+func TestOSMRoutesOverlapUsesSmallerSet(t *testing.T) {
+	feed := gtfsparser.NewFeed()
+	var offsets []float64
+	for _, base := range []float64{0, 500} { // 4 GTFS stops around each of two relation members
+		offsets = append(offsets, base, base+10, base+20, base+30)
+	}
+	for i := 0; i < 12; i++ { // 12 more stops far from any relation member
+		offsets = append(offsets, 3000+float64(i)*500)
+	}
+	r := gtfsLine(feed, "D1", "D1", 3, 0, offsets)
+	rel := relLine(1, "bus", "D1", "FF0000", "A", "B", 0, []float64{0, 500, 20000, 20500, 21000})
+
+	_, res := OSMRoutes(feed, []osmfeat.RouteRel{rel}, nil)
+
+	if r.Color != "" || !contains(res.UnmatchedRoutes, "D1") {
+		t.Errorf("route matched on a dense cluster: colour %q, unmatched %v", r.Color, res.UnmatchedRoutes)
+	}
+}

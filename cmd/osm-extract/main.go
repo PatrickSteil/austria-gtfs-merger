@@ -87,27 +87,7 @@ func main() {
 // feature builds a Feature from an object's tags, or reports false if the
 // object is not relevant.
 func feature(id int64, tags osm.Tags, lat, lon float64, area bool) (osmfeat.Feature, bool) {
-	m := tags.Map()
-	f := osmfeat.Feature{ID: id, Lat: lat, Lon: lon, Area: area}
-	if kind, ok := osmfeat.ClassifyTags(m); ok {
-		f.Kind = kind
-		f.StopPos = m["public_transport"] == "stop_position"
-		f.Platform = osmfeat.PlatformRef(kind, m)
-		f.Tactile = osmfeat.NormalizeTri(m["tactile_paving"])
-		f.Bench = osmfeat.NormalizeTri(m["bench"])
-		f.Shelter = osmfeat.NormalizeTri(m["shelter"])
-	} else if kind, ok := osmfeat.ClassifyExtra(m); ok {
-		f.Kind = kind
-	} else {
-		return osmfeat.Feature{}, false
-	}
-	f.Ref = m["local_ref"]
-	if f.Ref == "" {
-		f.Ref = m["ref"]
-	}
-	f.Wheelchair = osmfeat.NormalizeWheelchair(m["wheelchair"])
-	f.Name = m["name"]
-	return f, true
+	return osmfeat.FeatureFromTags(id, tags.Map(), lat, lon, area)
 }
 
 func scan(path string, fn func(o osm.Object)) error {
