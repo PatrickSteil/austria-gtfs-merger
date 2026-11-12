@@ -3,5 +3,7 @@
   "stops": 107153,
   "routes": 3649,
   "trips": 1311815,
-  "rail_routes": 343
+  "rail_routes": 343,
+  "wheelchair_known": 12020,
+  "extended_route_types": 426
 }
