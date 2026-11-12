@@ -123,8 +123,10 @@ Matching je Boarding-Stop:
 - Wert: `wheelchair=yes` → 1, `no` → 2, `limited` oder fehlend → 0.
   Widersprechen sich gleich gute Kandidaten (yes vs. no) → 0.
 - Eigene Werte der Quell-Feeds gewinnen (derzeit gibt es keine).
-- Parent-Stations: 1, wenn mindestens ein Kind 1 hat; 2, wenn alle bekannten
-  Kinder 2 haben; sonst 0.
+- Parent-Stations: 1, wenn alle Boarding-Kinder 1 haben; 2, wenn alle 2 haben;
+  sonst 0. (Geändert nach dem Review: Kinder mit Wert 0 erben den Wert der
+  Station, ein Parent mit 1 würde unbekannte Kinder als barrierefrei
+  veröffentlichen.)
 - Report: Abdeckung (Anteil 1/2/0 je Modus), Ambiguitäten, Median-Distanz.
 
 Ausfall-Verhalten: Gibt es weder frischen Download noch Cache, wird der Schritt

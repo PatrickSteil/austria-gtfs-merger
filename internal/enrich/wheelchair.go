@@ -244,14 +244,16 @@ func Wheelchair(feed *gtfsparser.Feed, feats []osmfeat.Feature, opts WheelchairO
 	return rep
 }
 
-// deriveParents sets wheelchair_boarding on stations without a value: 1 if
-// any child is accessible, 2 if all children with a known value are not.
+// deriveParents sets wheelchair_boarding on stations without a value. Boarding
+// stops with value 0 inherit their parent's value in GTFS, so a station only
+// gets 1 (or 2) when every boarding stop below it is 1 (or 2); otherwise it
+// stays 0 and the children keep their own values.
 func deriveParents(feed *gtfsparser.Feed, ids []string) {
-	type agg struct{ yes, no int }
+	type agg struct{ total, yes, no int }
 	sums := make(map[string]*agg)
 	for _, id := range ids {
 		s := feed.Stops[id]
-		if s.Parent_station == nil || s.Wheelchair_boarding == 0 {
+		if s.Location_type != 0 || s.Parent_station == nil {
 			continue
 		}
 		a := sums[s.Parent_station.Id]
@@ -259,9 +261,11 @@ func deriveParents(feed *gtfsparser.Feed, ids []string) {
 			a = &agg{}
 			sums[s.Parent_station.Id] = a
 		}
-		if s.Wheelchair_boarding == 1 {
+		a.total++
+		switch s.Wheelchair_boarding {
+		case 1:
 			a.yes++
-		} else {
+		case 2:
 			a.no++
 		}
 	}
@@ -270,11 +274,12 @@ func deriveParents(feed *gtfsparser.Feed, ids []string) {
 		if p.Location_type != 1 || p.Wheelchair_boarding != 0 {
 			continue
 		}
-		switch a := sums[p.Id]; {
+		a := sums[p.Id]
+		switch {
 		case a == nil:
-		case a.yes > 0:
+		case a.yes == a.total:
 			p.Wheelchair_boarding = 1
-		default:
+		case a.no == a.total:
 			p.Wheelchair_boarding = 2
 		}
 	}

@@ -38,8 +38,10 @@ jobs:
       - name: Resolve OSM extract week
         id: osm
         continue-on-error: true
+        timeout-minutes: 2
         run: |
-          LM=$(curl -sIL https://download.geofabrik.de/europe/austria-latest.osm.pbf | grep -i '^last-modified:' | tail -1 | cut -d' ' -f2- | tr -d '\r')
+          LM=$(curl -sIL --fail --max-time 60 https://download.geofabrik.de/europe/austria-latest.osm.pbf | grep -i '^last-modified:' | tail -1 | cut -d' ' -f2- | tr -d '\r')
+          [ -n "$LM" ] || { echo "no Last-Modified header from Geofabrik"; exit 1; }
           MONDAY=$(date -u -d "$LM -$(( $(date -u -d "$LM" +%u) - 1 )) days" +%Y%m%d)
           echo "week=$MONDAY" >> "$GITHUB_OUTPUT"
 
@@ -55,8 +57,9 @@ jobs:
         id: osmextract
         if: steps.osmcache.outputs.cache-hit != 'true' && steps.osm.outputs.week != ''
         continue-on-error: true
+        timeout-minutes: 20
         run: |
-          curl -sSL -o austria-latest.osm.pbf https://download.geofabrik.de/europe/austria-latest.osm.pbf
+          curl -sSL --fail --max-time 1000 -o austria-latest.osm.pbf https://download.geofabrik.de/europe/austria-latest.osm.pbf
           CGO_ENABLED=0 go run ./cmd/osm-extract --pbf austria-latest.osm.pbf --out osm-features.new.gz
           mv osm-features.new.gz osm-features.json.gz
           rm -f austria-latest.osm.pbf
@@ -71,6 +74,7 @@ jobs:
           key: osm-features-${{ steps.osm.outputs.week }}
 
       - name: Check OSM features age
+        continue-on-error: true
         run: |
           if [ ! -s osm-features.json.gz ]; then
             echo "::warning::No OSM features available; wheelchair_boarding will be missing from this feed."

@@ -123,6 +123,8 @@ func TestWheelchairKeepsSourceValues(t *testing.T) {
 	}
 }
 
+// A child with wheelchair_boarding 0 inherits the parent's value, so a parent
+// only gets a value when no child would be misread because of it.
 func TestWheelchairParents(t *testing.T) {
 	feed := gtfsparser.NewFeed()
 	mk := func(pid string, kids ...int8) *gtfs.Stop {
@@ -136,13 +138,21 @@ func TestWheelchairParents(t *testing.T) {
 		}
 		return p
 	}
-	some := mk("some", 1, 2, 0)
-	allNo := mk("allno", 2, 0)
-	none := mk("none", 0, 0)
-
-	Wheelchair(feed, nil, DefaultWheelchairOptions())
-
-	if some.Wheelchair_boarding != 1 || allNo.Wheelchair_boarding != 2 || none.Wheelchair_boarding != 0 {
-		t.Errorf("parents = %d %d %d, want 1 2 0", some.Wheelchair_boarding, allNo.Wheelchair_boarding, none.Wheelchair_boarding)
+	for _, c := range []struct {
+		name string
+		kids []int8
+		want int8
+	}{
+		{"allyes", []int8{1, 1}, 1},
+		{"allno", []int8{2, 2}, 2},
+		{"mixed", []int8{1, 2}, 0},
+		{"unknownchild", []int8{1, 0}, 0},
+		{"allunknown", []int8{0, 0}, 0},
+	} {
+		p := mk(c.name, c.kids...)
+		Wheelchair(feed, nil, DefaultWheelchairOptions())
+		if p.Wheelchair_boarding != c.want {
+			t.Errorf("%s: parent = %d, want %d", c.name, p.Wheelchair_boarding, c.want)
+		}
 	}
 }
