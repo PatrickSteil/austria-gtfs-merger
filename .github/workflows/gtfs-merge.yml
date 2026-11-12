@@ -31,6 +31,60 @@ jobs:
       - name: Build
         run: make
 
+      # OpenStreetMap accessibility features for the wheelchair step. The
+      # extract is rebuilt at most once per week (cache key = Monday of the
+      # Geofabrik file's week) and never blocks the merge: on any failure the
+      # step uses an older cache or is skipped, with a warning.
+      - name: Resolve OSM extract week
+        id: osm
+        continue-on-error: true
+        run: |
+          LM=$(curl -sIL https://download.geofabrik.de/europe/austria-latest.osm.pbf | grep -i '^last-modified:' | tail -1 | cut -d' ' -f2- | tr -d '\r')
+          MONDAY=$(date -u -d "$LM -$(( $(date -u -d "$LM" +%u) - 1 )) days" +%Y%m%d)
+          echo "week=$MONDAY" >> "$GITHUB_OUTPUT"
+
+      - name: Restore OSM features cache
+        id: osmcache
+        uses: actions/cache/restore@v4
+        with:
+          path: osm-features.json.gz
+          key: osm-features-${{ steps.osm.outputs.week }}
+          restore-keys: osm-features-
+
+      - name: Extract OSM features
+        id: osmextract
+        if: steps.osmcache.outputs.cache-hit != 'true' && steps.osm.outputs.week != ''
+        continue-on-error: true
+        run: |
+          curl -sSL -o austria-latest.osm.pbf https://download.geofabrik.de/europe/austria-latest.osm.pbf
+          CGO_ENABLED=0 go run ./cmd/osm-extract --pbf austria-latest.osm.pbf --out osm-features.new.gz
+          mv osm-features.new.gz osm-features.json.gz
+          rm -f austria-latest.osm.pbf
+
+      # Only a freshly extracted file is saved, so a stale file restored via
+      # restore-keys can never be stored under a newer key.
+      - name: Save OSM features cache
+        if: steps.osmextract.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: osm-features.json.gz
+          key: osm-features-${{ steps.osm.outputs.week }}
+
+      - name: Check OSM features age
+        run: |
+          if [ ! -s osm-features.json.gz ]; then
+            echo "::warning::No OSM features available; wheelchair_boarding will be missing from this feed."
+          elif [ "${{ steps.osmextract.outcome }}" = "failure" ]; then
+            echo "::warning::OSM extraction failed; using cached features from ${{ steps.osmcache.outputs.cache-matched-key }}."
+          fi
+          KEY="${{ steps.osmcache.outputs.cache-matched-key }}"
+          if [ -n "$KEY" ] && [ "${{ steps.osmextract.outcome }}" != "success" ]; then
+            AGE=$(( ( $(date -u +%s) - $(date -u -d "${KEY#osm-features-}" +%s) ) / 86400 ))
+            if [ "$AGE" -gt 60 ]; then
+              echo "::warning::OSM features cache is $AGE days old."
+            fi
+          fi
+
       # Run the merger. A non-zero exit (failed download or parse error) fails
       # the job, so nothing is committed or released. On success we detect
       # whether new data was merged by checking whether versions.json changed.
@@ -44,10 +98,16 @@ jobs:
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             FORCE_FLAG="--force"
           fi
+          OSM_FLAG=""
+          if [ -s osm-features.json.gz ]; then
+            OSM_FLAG="--osm-features osm-features.json.gz"
+          fi
           ./merger -d -e -v --drop-shapes \
+            --enrich all --extended-route-types \
+            --enrich-report enrich-report.json \
             --manifest versions.json \
             --output austria.merged.zip \
-            $FORCE_FLAG
+            $OSM_FLAG $FORCE_FLAG
 
       # Check whether the manifest changed (= at least one feed was updated).
       - name: Check for changes
@@ -98,11 +158,17 @@ jobs:
             --minimize-services \
             -o austria.tidy.zip \
             austria.merged.zip
-          # --drop-non-essential removes feed_info.txt, but the release notes
-          # rely on its feed_version for cheap version checks: put it back.
+          # --drop-non-essential removes feed_info.txt (the release notes rely
+          # on its feed_version for cheap version checks) and attributions.txt
+          # (required by the OSM licence): put both back. Measured with
+          # scripts/check-tidy-fields.sh: platform_code, wheelchair_boarding,
+          # route_desc, route colors and extended route types survive tidy.
           mkdir feed-info
           unzip -p austria.merged.zip feed_info.txt > feed-info/feed_info.txt
-          zip -j austria.tidy.zip feed-info/feed_info.txt
+          if unzip -Z1 austria.merged.zip | grep -qx attributions.txt; then
+            unzip -p austria.merged.zip attributions.txt > feed-info/attributions.txt
+          fi
+          zip -j austria.tidy.zip feed-info/*.txt
           mv austria.tidy.zip austria.merged.zip
           ls -lh austria.merged.zip
 
@@ -157,9 +223,17 @@ jobs:
             "
             ```
 
+            ### Enrichment and attribution
+            `enrich-report.json` lists what the enrichment steps changed.
+            Wheelchair data in this feed is derived from OpenStreetMap:
+            © OpenStreetMap contributors, licensed under the
+            [ODbL](https://www.openstreetmap.org/copyright).
+
             Source manifests: see `versions.json` in this repository for the
             individual feed versions that were merged.
-          files: austria.merged.zip
+          files: |
+            austria.merged.zip
+            enrich-report.json
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
