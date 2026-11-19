@@ -1,9 +1,9 @@
 {
   "agencies": 140,
-  "stops": 107408,
+  "stops": 107395,
   "routes": 3641,
-  "trips": 1321999,
-  "rail_routes": 341,
-  "wheelchair_known": 11996,
-  "extended_route_types": 417
+  "trips": 1322619,
+  "rail_routes": 340,
+  "wheelchair_known": 11999,
+  "extended_route_types": 416
 }
